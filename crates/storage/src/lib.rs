@@ -17,6 +17,10 @@ mod error;
 mod migrations;
 mod repo;
 
+/// Re-exported so callers can name a `Connection` without depending on a
+/// specific `rusqlite` version themselves.
+pub use rusqlite;
+
 pub use database::{Database, DatabaseOptions};
 pub use error::{StorageError, StorageResult};
 pub use migrations::{Migration, SCHEMA_VERSION, migrations};

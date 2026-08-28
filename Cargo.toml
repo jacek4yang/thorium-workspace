@@ -65,12 +65,19 @@ rqrr = "0.10"
 # rustls rather than native-tls: no OpenSSL runtime dependency in the portable
 # EXE. Native roots are preferred so a corporate TLS-inspecting proxy keeps
 # working, with the bundled Mozilla roots as a fallback.
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "webpki-roots", "json", "stream", "charset", "http2"] }
+#
+# The crypto provider is pinned to ring rather than reqwest's aws-lc-rs default:
+# ring ships pre-generated object files for x86_64-pc-windows-msvc, so a Windows
+# build needs no NASM and no C toolchain beyond MSVC itself.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "rustls-native-certs", "webpki-roots", "json", "stream", "charset", "http2"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 zip = { version = "8", default-features = false, features = ["deflate", "deflate64", "bzip2", "zstd"] }
 fs4 = { version = "1", features = ["sync"] }
 arboard = { version = "3", default-features = false, features = ["image-data", "windows-sys"] }
 chrono-tz = "0.10"
 futures-util = "0.3"
+# Plain ws:// to loopback only, so no TLS feature is enabled.
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake"] }
 tempfile = "3"
 serial_test = "3"
 

@@ -167,6 +167,7 @@ impl ThoriumManager {
     /// Returns [`ThoriumError::ReleaseLookup`] when the HTTP clients cannot be
     /// built, and [`ThoriumError::Io`] when the directories cannot be created.
     pub fn new(workspace_root: &Path, config: ReleaseClientConfig) -> ThoriumResult<Self> {
+        crate::install_crypto_provider();
         let paths = ThoriumPaths::new(workspace_root);
         paths.ensure()?;
         let http = reqwest::Client::builder()

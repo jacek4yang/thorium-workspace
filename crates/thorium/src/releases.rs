@@ -54,6 +54,7 @@ impl ReleaseClient {
     /// Returns [`ThoriumError::ReleaseLookup`] when the HTTP client cannot be
     /// constructed.
     pub fn new(config: ReleaseClientConfig) -> ThoriumResult<Self> {
+        crate::install_crypto_provider();
         let http = reqwest::Client::builder()
             .timeout(config.request_timeout)
             .user_agent(user_agent())

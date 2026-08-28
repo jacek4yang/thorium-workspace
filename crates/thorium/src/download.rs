@@ -255,6 +255,7 @@ mod tests {
         let (url, server) = serve_once(body.clone(), "HTTP/1.1 200 OK").await;
         let dir = tempfile::tempdir().expect("tempdir");
         let destination = dir.path().join("staging").join("archive.zip");
+        crate::install_crypto_provider();
         let http = reqwest::Client::new();
 
         let mut progress_calls = 0;
@@ -280,6 +281,7 @@ mod tests {
         let (url, server) = serve_once(vec![0u8; 4096], "HTTP/1.1 200 OK").await;
         let dir = tempfile::tempdir().expect("tempdir");
         let destination = dir.path().join("archive.zip");
+        crate::install_crypto_provider();
         let http = reqwest::Client::new();
         let limits = DownloadLimits {
             max_bytes: 10,
@@ -299,6 +301,7 @@ mod tests {
         let (url, server) = serve_once(b"nope".to_vec(), "HTTP/1.1 404 Not Found").await;
         let dir = tempfile::tempdir().expect("tempdir");
         let destination = dir.path().join("archive.zip");
+        crate::install_crypto_provider();
         let http = reqwest::Client::new();
 
         let err = download_to_file(&http, &url, &destination, DownloadLimits::default(), |_, _| {})
@@ -331,6 +334,7 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("tempdir");
         let destination = dir.path().join("archive.zip");
+        crate::install_crypto_provider();
         let http = reqwest::Client::new();
         let limits = DownloadLimits {
             stall_timeout: std::time::Duration::from_millis(300),

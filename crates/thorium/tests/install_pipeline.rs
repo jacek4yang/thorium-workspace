@@ -114,6 +114,9 @@ async fn start_fixture(version: &'static str, archive: Vec<u8>) -> Fixture {
 }
 
 fn manager_for(root: &Path, base: &str) -> ThoriumManager {
+    // Any consumer that builds its own reqwest client must install the crypto
+    // provider first; the manager's own constructors do this for themselves.
+    tw_thorium::install_crypto_provider();
     let http = reqwest::Client::builder().build().expect("http client");
     let config = ReleaseClientConfig {
         api_base: base.to_owned(),

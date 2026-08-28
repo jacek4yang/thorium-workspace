@@ -113,6 +113,19 @@ impl ThoriumError {
 /// Thorium result alias.
 pub type ThoriumResult<T> = Result<T, ThoriumError>;
 
+/// Installs the process-wide rustls crypto provider, once.
+///
+/// reqwest is built with `rustls-no-provider` so the provider is an explicit
+/// choice rather than a transitive default. Installing it more than once is not
+/// an error here: another component may legitimately have installed the same
+/// provider first.
+pub fn install_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 /// Computes the lowercase hex SHA-256 of a file.
 ///
 /// # Errors

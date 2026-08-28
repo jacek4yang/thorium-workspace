@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use tw_secrets::{SecretBytes, SecretString};
+use zeroize::Zeroizing;
 
 use crate::document::VaultDocument;
 use crate::format::{HEADER_LEN, KdfParameters, TAG_LEN, VaultHeader};
@@ -188,7 +189,10 @@ impl VaultStore {
         key: &SecretBytes,
         document: &VaultDocument,
     ) -> VaultResult<()> {
-        let plaintext = serde_json::to_vec(document).map_err(|_| VaultError::Payload)?;
+        // The serialized document is every secret in the clear. It is wrapped so
+        // that the buffer is scrubbed when it drops, rather than left in the
+        // allocator for whatever reuses that memory next.
+        let plaintext = Zeroizing::new(serde_json::to_vec(document).map_err(|_| VaultError::Payload)?);
         let header_bytes = header.to_bytes();
         let cipher = XChaCha20Poly1305::new_from_slice(key.expose()).map_err(|_| VaultError::Crypto)?;
         let nonce = XNonce::from_slice(&header.nonce);
@@ -237,15 +241,19 @@ fn decrypt_document(header: &VaultHeader, key: &SecretBytes, file: &[u8]) -> Vau
     // A failure here means the key was wrong, the header was edited or the body
     // was altered. All three are reported as BadPassword: the AEAD cannot tell
     // them apart, and neither should an attacker.
-    let plaintext = cipher
-        .decrypt(
-            nonce,
-            Payload {
-                msg: body,
-                aad: &header_bytes,
-            },
-        )
-        .map_err(|_| VaultError::BadPassword)?;
+    // Same reasoning as the write side: this buffer holds every secret in the
+    // clear until it is parsed, so it is scrubbed on drop.
+    let plaintext = Zeroizing::new(
+        cipher
+            .decrypt(
+                nonce,
+                Payload {
+                    msg: body,
+                    aad: &header_bytes,
+                },
+            )
+            .map_err(|_| VaultError::BadPassword)?,
+    );
     serde_json::from_slice(&plaintext).map_err(|_| VaultError::Payload)
 }
 

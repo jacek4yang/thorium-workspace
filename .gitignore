@@ -1,0 +1,44 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Tauri generated/bundled output
+src-tauri/target/
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Portable runtime data - never commit user data
+/workspace.db
+/workspace.json
+/vault/
+/browsers/
+/profiles/
+/runtime/
+/backups/
+/logs/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Coverage / test output
+coverage/
+*.profraw
+*.profdata
+
+# Temporary files
+*.tmp
+*.temp
+*.log

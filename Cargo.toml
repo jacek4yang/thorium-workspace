@@ -62,7 +62,10 @@ url = "2.5"
 percent-encoding = "2.3"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
 rqrr = "0.10"
-reqwest = { version = "0.13", default-features = false, features = ["rustls-tls", "json", "stream", "charset", "http2"] }
+# rustls rather than native-tls: no OpenSSL runtime dependency in the portable
+# EXE. Native roots are preferred so a corporate TLS-inspecting proxy keeps
+# working, with the bundled Mozilla roots as a fallback.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "webpki-roots", "json", "stream", "charset", "http2"] }
 zip = { version = "8", default-features = false, features = ["deflate", "deflate64", "bzip2", "zstd"] }
 fs4 = { version = "1", features = ["sync"] }
 arboard = { version = "3", default-features = false, features = ["image-data", "windows-sys"] }

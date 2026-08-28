@@ -177,7 +177,12 @@ export function AccountsPage({
 
             {selected ? (
               <AccountDetail
-                key={selected.id}
+                // Keyed on the lock state as well as the account: locking the
+                // vault remounts this subtree, which discards every revealed
+                // password and recovery code. Without it a value revealed
+                // before an idle auto-lock would reappear on unlock without
+                // the user asking for it again.
+                key={`${selected.id}:${locked ? "locked" : "open"}`}
                 account={selected}
                 locked={locked}
                 onToast={onToast}

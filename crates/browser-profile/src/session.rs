@@ -16,7 +16,14 @@ use crate::lock::ProfileLock;
 use crate::{ProfileError, ProfileResult};
 
 /// How long to wait for Chromium to publish its DevTools endpoint.
-const DEVTOOLS_TIMEOUT: Duration = Duration::from_secs(20);
+///
+/// The wait is deliberately inline rather than moved to a background task: the
+/// overrides have to be attached before the first startup page runs script, or
+/// that page briefly observes the host timezone. Chromium writes the file within
+/// about a second of starting, so ten seconds is generous; the cost of the
+/// worst case is that a launch takes that long before reporting that the
+/// control channel was unavailable, and the profile still runs.
+const DEVTOOLS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// What the UI is told about a running session.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

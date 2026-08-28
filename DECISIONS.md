@@ -112,6 +112,14 @@ paused, configured, and only then released, so it never briefly observes the
 host timezone. Surfaces outside a page's JavaScript environment are not covered;
 `SECURITY.md` says which.
 
+**Why the wait is inline.** Launching a profile with an override waits for the
+DevTools endpoint before returning, which holds the workspace lock for that time.
+Attaching in the background would make launch feel instant, but the first
+startup page could then run script before the override landed — which is the
+whole thing the override exists to prevent. The wait is bounded at ten seconds;
+Chromium normally publishes the endpoint in about one. If it never appears the
+profile still runs, unemulated, and the Diagnostics page says so.
+
 ---
 
 ## 5. rustls with the `ring` provider, not aws-lc-rs

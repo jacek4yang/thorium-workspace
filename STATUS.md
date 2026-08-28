@@ -48,23 +48,49 @@ cargo clippy -p tw-windows-platform -p tw-browser-profile --all-targets \
 
 ---
 
-## Not yet verified on Windows
+## Verified on Windows CI
 
-The development host for this work is Linux. The following need a Windows run —
-CI performs all of them on `windows-latest`:
+Run [33155370138](https://github.com/jacek4yang/thorium-workspace/actions/runs/33155370138)
+on `windows-latest` at commit `58b2e2d` completed **successfully**, every step:
 
-| Item | Why it needs Windows |
-| --- | --- |
-| Release build of the portable `.exe` | Needs the MSVC toolchain; CI builds and smoke-tests it |
-| Job Object process-tree cleanup | Job Objects do not exist elsewhere; `tests/job_cleanup.rs` runs on Windows CI |
-| Named-mutex single-instance guard | The Linux build uses a file lock as an equivalent |
-| GDI screen capture for QR scanning | Windows-only API |
-| Window activation for an already-running profile | Windows-only API |
-| `tw-storage` cross-target check | `rusqlite`'s bundled SQLite needs a C toolchain the Linux host lacks for that target |
+```text
+cargo fmt --all -- --check                                 pass
+cargo clippy --workspace --all-targets --locked -D warnings pass
+npm run lint / typecheck / test                            pass
+cargo test --workspace --locked                            pass
+npm run build                                              pass
+cargo build --release --locked -p thorium-workspace        pass (9m 55s)
+Built target/release/thorium-workspace.exe (18.5 MB)       PE smoke test pass
+```
 
-**Nothing in this repository claims these have passed.** CI is the first place
-they run — and the first run found a real Windows-only bug, which is recorded
-below.
+That run was the first time the release build and the smoke test ever executed.
+The Job Object tests, the named-mutex guard, the GDI capture and the window
+activation paths all built and ran on Windows as part of it.
+
+The Ubuntu "Platform-independent crates" job passed in the same run.
+
+Two fixes landed after that run and are covered by the next one: the vault
+plaintext-buffer scrub (`107cdb0`) and clearing revealed secrets on vault lock
+(`3a0f68c`).
+
+---
+
+## Windows behaviour still needing a desktop
+
+CI proves these compile, link and pass their tests on Windows. It cannot prove
+they behave correctly in front of a user, because the runner has no desktop
+session and no real browser:
+
+| Item | What CI proved | What it could not |
+| --- | --- | --- |
+| Job Object process-tree cleanup | `tests/job_cleanup.rs` passed: a grandchild process is terminated with the job | Nothing further — this one is genuinely covered |
+| Named-mutex single-instance guard | Builds and its unit tests pass | Two real GUI instances racing for the same workspace |
+| GDI screen capture for QR scanning | Builds and links | Capturing an actual screen; the runner has no desktop session |
+| Window activation for an already-running profile | Builds and links | Focusing a real browser window |
+| The portable `.exe` | Links, is a valid 18.5 MB PE, frontend embedded | Opening a window; a Tauri binary cannot run headlessly |
+
+CI is the first place the Windows paths ran — and the first run found a real
+Windows-only bug, recorded below. The second run, after the fix, was green.
 
 ### What the first Windows CI run found
 
@@ -94,7 +120,7 @@ file is empty and the record is readable while the lock is held.
 | # | Step | Status |
 | --: | --- | --- |
 | 1 | Download one portable EXE from a GitHub Release | Workflow written; runs on tag |
-| 2 | Put it in a writable folder and run it | Build verified in CI; first run needs a Windows desktop |
+| 2 | Put it in a writable folder and run it | 18.5 MB EXE built and smoke-tested in CI; first run needs a Windows desktop |
 | 3 | Workspace initializes beside the EXE | Implemented; 11 bootstrap tests |
 | 4 | Create/unlock the encrypted Vault | Implemented; 47 vault tests |
 | 5 | Install portable Thorium from the GUI | Implemented; 4 end-to-end tests against a fixture server. Not yet run against the real upstream |
@@ -106,12 +132,13 @@ file is empty and the record is readable while the lock is held.
 | 11 | Launch both profiles with independent User Data | Implemented; proven against a stand-in browser. Not yet with real Thorium |
 | 12 | Confirm timezone/locale behaviour | Implemented; not yet observed against a real Chromium |
 | 13 | Stop/restart without losing state | Implemented; covered by a restart test |
-| 14 | Browser processes clean up correctly | Implemented; Job Object tests run on Windows CI |
+| 14 | Browser processes clean up correctly | **Observed**; Job Object tests passed on Windows CI |
 | 15 | Diagnostics expose no secrets | Implemented; tested with secret canaries |
-| 16 | CI green | Workflow written; first run is on this branch |
+| 16 | CI green | **Observed green** on `windows-latest`, run 33155370138 |
 | 17 | Tag build produces the EXE and SHA-256 | Workflow written; runs on tag |
 
-**v1.0.0 is not complete** until 5, 11, 12 and 16 have been observed on Windows.
+**v1.0.0 is not complete** until 5, 11 and 12 have been observed on a Windows
+desktop. Step 16 is now observed.
 Steps 1, 2 and 17 depend on a tag, which is deliberately not created before
 review.
 

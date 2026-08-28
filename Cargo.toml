@@ -11,7 +11,6 @@ members = [
     "crates/browser-profile",
     "crates/controller",
     "crates/windows-platform",
-    "crates/test-support",
     "src-tauri",
 ]
 
@@ -35,7 +34,6 @@ tw-thorium = { path = "crates/thorium", version = "1.0.0" }
 tw-browser-profile = { path = "crates/browser-profile", version = "1.0.0" }
 tw-controller = { path = "crates/controller", version = "1.0.0" }
 tw-windows-platform = { path = "crates/windows-platform", version = "1.0.0" }
-tw-test-support = { path = "crates/test-support", version = "1.0.0" }
 
 # Shared third-party dependencies (single source of truth for versions).
 thiserror = "2.0"

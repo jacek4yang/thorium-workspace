@@ -56,6 +56,10 @@ tested on any machine.
 | `tw-controller` | Bootstrap, application services, clipboard guard, backup, diagnostics. |
 | `thorium-workspace` | The Tauri boundary: commands, events, background tasks. |
 
+A `test-support` crate was sketched in the original plan and is deliberately not
+here: the shared fixtures each crate actually needed turned out to be local to
+it, and an empty crate carried in the workspace is scaffolding, not structure.
+
 ## Where the data is
 
 ```text

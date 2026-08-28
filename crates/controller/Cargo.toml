@@ -1,0 +1,33 @@
+[package]
+name = "tw-controller"
+description = "Application services binding storage, vault, OTP, Thorium and browser profiles together."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+tw-domain = { workspace = true }
+tw-secrets = { workspace = true }
+tw-storage = { workspace = true }
+tw-vault = { workspace = true }
+tw-otp = { workspace = true }
+tw-qr = { workspace = true }
+tw-thorium = { workspace = true }
+tw-browser-profile = { workspace = true }
+tw-windows-platform = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+tokio = { workspace = true }
+arboard = { workspace = true }
+zip = { workspace = true }
+image = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

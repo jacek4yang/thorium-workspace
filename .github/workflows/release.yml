@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (for a dry run)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 3
+  RUSTUP_MAX_RETRIES: 3
+
+jobs:
+  build:
+    name: Build the portable executable
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Determine the version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          if (-not $tag) { $tag = "${{ github.ref_name }}" }
+          $version = $tag -replace '^v', ''
+          $declared = (Get-Content VERSION -Raw).Trim()
+          if ($version -ne $declared) {
+            throw "tag $tag does not match the VERSION file ($declared)"
+          }
+          # The Cargo workspace and the Tauri config must agree too, so a
+          # release cannot ship a build that reports a different version than
+          # the tag it came from.
+          $cargoVersion = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          if ($version -ne $cargoVersion) {
+            throw "tag $tag does not match the workspace version ($cargoVersion)"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Verify the release before building it
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Frontend checks
+        working-directory: app
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+
+      - name: Build the frontend
+        working-directory: app
+        run: npm run build
+
+      - name: Build the portable executable
+        run: cargo build --release --locked --package thorium-workspace
+
+      - name: Name and checksum the artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $name = "ThoriumWorkspace-v$version-x86_64.exe"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/release/thorium-workspace.exe "dist/$name"
+
+          $size = (Get-Item "dist/$name").Length
+          if ($size -lt 5MB) { throw "the executable is implausibly small: $size bytes" }
+
+          # The checksum file uses the `sha256sum` layout so it can be verified
+          # with either PowerShell or the usual Unix tooling.
+          $hash = (Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name" | Out-File -FilePath "dist/$name.sha256" -Encoding ascii -NoNewline
+
+          Write-Host "Built $name"
+          Write-Host "  size:   $([math]::Round($size / 1MB, 1)) MB"
+          Write-Host "  sha256: $hash"
+          "name=$name" >> $env:GITHUB_OUTPUT
+
+      - name: Verify the checksum file
+        shell: pwsh
+        run: |
+          $name = "${{ steps.artifacts.outputs.name }}"
+          $expected = (Get-Content "dist/$name.sha256" -Raw).Split("  ")[0]
+          $actual = (Get-FileHash "dist/$name" -Algorithm SHA256).Hash.ToLower()
+          if ($expected -ne $actual) { throw "the checksum file does not match the executable" }
+          Write-Host "checksum verified: $actual"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-executable
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Thorium Workspace ${{ steps.version.outputs.tag }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/${{ steps.artifacts.outputs.name }}
+            dist/${{ steps.artifacts.outputs.name }}.sha256
+          body: |
+            Portable Windows build of Thorium Workspace ${{ steps.version.outputs.tag }}.
+
+            **Requirements**: Windows 10 22H2 or Windows 11, x86-64, and the
+            Microsoft Edge WebView2 runtime (present on Windows 11 and on
+            up-to-date Windows 10).
+
+            **Use**: put the `.exe` in a folder you can write to and run it. The
+            workspace is created beside it. Nothing is installed, and nothing is
+            written to `%APPDATA%`.
+
+            **Verify the download** before running it:
+
+            ```powershell
+            Get-FileHash .\${{ steps.artifacts.outputs.name }} -Algorithm SHA256
+            ```
+
+            and compare it with the `.sha256` file published alongside.
+
+            Thorium itself is not bundled. The application downloads a portable
+            Thorium build from the upstream project when you ask it to, and
+            verifies what it received before installing it.

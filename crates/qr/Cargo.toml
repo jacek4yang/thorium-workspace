@@ -1,0 +1,21 @@
+[package]
+name = "tw-qr"
+description = "QR code decoding for two-factor credential import."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+tw-domain = { workspace = true }
+tw-otp = { workspace = true }
+tw-secrets = { workspace = true }
+image = { workspace = true }
+rqrr = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+qrcode = { version = "0.14", default-features = false }
+tempfile = { workspace = true }

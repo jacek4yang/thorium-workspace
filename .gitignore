@@ -42,3 +42,6 @@ coverage/
 *.tmp
 *.temp
 *.log
+
+# Cargo build artifacts inside crates
+crates/*/target/

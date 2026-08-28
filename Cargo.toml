@@ -1,0 +1,83 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/domain",
+    "crates/secrets",
+    "crates/storage",
+    "crates/vault",
+    "crates/otp",
+    "crates/qr",
+    "crates/thorium",
+    "crates/browser-profile",
+    "crates/controller",
+    "crates/windows-platform",
+    "crates/test-support",
+    "src-tauri",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT"
+repository = "https://github.com/jacek4yang/thorium-workspace"
+authors = ["Thorium Workspace contributors"]
+
+[workspace.dependencies]
+# Internal crates
+tw-domain = { path = "crates/domain", version = "1.0.0" }
+tw-secrets = { path = "crates/secrets", version = "1.0.0" }
+tw-storage = { path = "crates/storage", version = "1.0.0" }
+tw-vault = { path = "crates/vault", version = "1.0.0" }
+tw-otp = { path = "crates/otp", version = "1.0.0" }
+tw-qr = { path = "crates/qr", version = "1.0.0" }
+tw-thorium = { path = "crates/thorium", version = "1.0.0" }
+tw-browser-profile = { path = "crates/browser-profile", version = "1.0.0" }
+tw-controller = { path = "crates/controller", version = "1.0.0" }
+tw-windows-platform = { path = "crates/windows-platform", version = "1.0.0" }
+tw-test-support = { path = "crates/test-support", version = "1.0.0" }
+
+# Shared third-party dependencies (single source of truth for versions).
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.26", features = ["v4", "serde"] }
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-appender = "0.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "process", "io-util", "net"] }
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+zeroize = { version = "1.9", features = ["derive"] }
+subtle = "2.6"
+getrandom = "0.4"
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+base32 = "0.5"
+hex = "0.4"
+url = "2.5"
+percent-encoding = "2.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
+rqrr = "0.10"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-tls", "json", "stream", "charset", "http2"] }
+zip = { version = "8", default-features = false, features = ["deflate", "deflate64", "bzip2", "zstd"] }
+fs4 = { version = "1", features = ["sync"] }
+arboard = { version = "3", default-features = false, features = ["image-data", "windows-sys"] }
+chrono-tz = "0.10"
+futures-util = "0.3"
+tempfile = "3"
+serial_test = "3"
+
+[profile.release]
+# Optimise for speed: Argon2id key derivation and SQLite dominate perceived
+# latency far more than the few MB saved by a size-optimised build.
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+# Panics unwind so a bug in one Tauri command cannot take the whole workspace
+# process down without running Drop implementations (which zeroize secrets).
+panic = "unwind"

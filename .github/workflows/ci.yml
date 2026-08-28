@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # A CI failure should be about the code, not about a flaky download.
+  CARGO_NET_RETRY: 3
+  RUSTUP_MAX_RETRIES: 3
+
+jobs:
+  # Windows is the only platform this product supports, so it is the only
+  # platform CI runs on. A green Linux build would prove nothing about the
+  # Job Objects, the named mutex or the WebView2 host the product depends on.
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the pinned Rust toolchain
+        # rust-toolchain.toml pins the version, components and target, so this
+        # only has to make rustup honour it.
+        run: |
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: app
+        # `npm ci` fails rather than silently resolving something new, which is
+        # the point of committing the lockfile.
+        run: npm ci
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Frontend lint
+        working-directory: app
+        run: npm run lint
+
+      - name: Frontend typecheck
+        working-directory: app
+        run: npm run typecheck
+
+      - name: Frontend tests
+        working-directory: app
+        run: npm test
+
+      - name: Rust tests
+        run: cargo test --workspace --locked
+
+      - name: Build the frontend
+        working-directory: app
+        run: npm run build
+
+      - name: Build the portable executable
+        run: cargo build --release --locked --package thorium-workspace
+
+      - name: Smoke test the built executable
+        shell: pwsh
+        run: |
+          $exe = "target/release/thorium-workspace.exe"
+          if (-not (Test-Path $exe)) { throw "the executable was not produced" }
+          $size = (Get-Item $exe).Length
+          Write-Host "Built $exe ($([math]::Round($size / 1MB, 1)) MB)"
+          # A Tauri binary under the Windows subsystem cannot be exercised
+          # headlessly, so the check is that it is a real, plausibly sized PE
+          # with the frontend embedded rather than that it opens a window.
+          if ($size -lt 5MB) { throw "the executable is implausibly small: $size bytes" }
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "the executable is not a PE image" }
+
+      - name: Upload the build for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: thorium-workspace-ci-build
+          path: target/release/thorium-workspace.exe
+          retention-days: 7
+          if-no-files-found: error
+
+  # The platform-independent crates are additionally built for Linux, because a
+  # domain, vault or OTP bug that only shows up off Windows is still a bug, and
+  # because it proves the layering rule: those crates depend on nothing
+  # Windows-specific.
+  portable-crates:
+    name: Platform-independent crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Test the platform-independent crates
+        run: |
+          cargo test --locked \
+            -p tw-domain -p tw-secrets -p tw-storage -p tw-vault \
+            -p tw-otp -p tw-qr -p tw-thorium
+
+      - name: Clippy the platform-independent crates
+        run: |
+          cargo clippy --locked --all-targets \
+            -p tw-domain -p tw-secrets -p tw-storage -p tw-vault \
+            -p tw-otp -p tw-qr -p tw-thorium -- -D warnings

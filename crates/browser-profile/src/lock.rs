@@ -28,15 +28,27 @@ pub struct LockHolder {
 ///
 /// Dropping the guard releases the lock. The operating system also releases it
 /// if the process dies, so a crash never leaves a profile permanently locked.
+///
+/// # Why the holder record is a separate file
+///
+/// The lock file itself is always empty. Windows file locks are *mandatory*:
+/// while a range is locked, another handle cannot read it — not even one in the
+/// same process. Storing the holder inside the locked file would therefore make
+/// it unreadable exactly when it matters, which is while something holds the
+/// lock. The advisory holder record lives beside it instead.
 #[derive(Debug)]
 pub struct ProfileLock {
     path: PathBuf,
-    file: std::fs::File,
+    holder_path: PathBuf,
+    _file: std::fs::File,
 }
 
 impl ProfileLock {
-    /// The conventional lock file name inside a profile directory.
+    /// The lock file inside a profile directory. Always empty.
     pub const FILE_NAME: &'static str = "thorium-workspace.lock";
+
+    /// The advisory record of who holds the lock. Freely readable.
+    pub const HOLDER_FILE_NAME: &'static str = "thorium-workspace.owner.json";
 
     /// Takes the lock for the profile rooted at `profile_dir`.
     ///
@@ -49,6 +61,7 @@ impl ProfileLock {
             ProfileError::UserData(format!("{} could not be created: {e}", profile_dir.display()))
         })?;
         let path = profile_dir.join(Self::FILE_NAME);
+        let holder_path = profile_dir.join(Self::HOLDER_FILE_NAME);
         let file = std::fs::OpenOptions::new()
             .create(true)
             .read(true)
@@ -59,15 +72,25 @@ impl ProfileLock {
 
         match file.try_lock() {
             Ok(()) => {}
-            Err(_) => {
-                // Reading the holder is best effort: the file may be mid-write.
+            // Only contention means the profile is in use. Any other failure is
+            // an I/O problem, and reporting it as "already running" would send
+            // the user looking for a browser that is not there.
+            Err(std::fs::TryLockError::WouldBlock) => {
+                // Reading the record is best effort: it may be mid-write.
                 return Err(ProfileError::AlreadyRunning {
-                    holder: read_holder(&path),
+                    holder: read_holder(&holder_path),
                 });
+            }
+            Err(std::fs::TryLockError::Error(error)) => {
+                return Err(ProfileError::Lock(error.to_string()));
             }
         }
 
-        let mut lock = Self { path, file };
+        let lock = Self {
+            path,
+            holder_path,
+            _file: file,
+        };
         lock.write_holder(&LockHolder {
             manager_pid: std::process::id(),
             browser_pid: None,
@@ -82,13 +105,19 @@ impl ProfileLock {
         &self.path
     }
 
+    /// The holder record path.
+    #[must_use]
+    pub fn holder_path(&self) -> &Path {
+        &self.holder_path
+    }
+
     /// Records the browser process id once it has been launched.
     ///
     /// # Errors
     ///
     /// Returns [`ProfileError::Io`] when the file cannot be written.
     pub fn record_browser_pid(&mut self, pid: u32) -> ProfileResult<()> {
-        let mut holder = read_holder(&self.path).unwrap_or(LockHolder {
+        let mut holder = read_holder(&self.holder_path).unwrap_or(LockHolder {
             manager_pid: std::process::id(),
             browser_pid: None,
             acquired_at: now_seconds(),
@@ -98,9 +127,12 @@ impl ProfileLock {
     }
 
     /// Reads whoever is recorded as holding the lock.
+    ///
+    /// Advisory only: a record can survive a crash. [`ProfileLock::is_locked`]
+    /// is what actually answers whether a profile is in use.
     #[must_use]
     pub fn read_holder(profile_dir: &Path) -> Option<LockHolder> {
-        read_holder(&profile_dir.join(Self::FILE_NAME))
+        read_holder(&profile_dir.join(Self::HOLDER_FILE_NAME))
     }
 
     /// Whether a profile directory is currently locked by a live session.
@@ -131,22 +163,20 @@ impl ProfileLock {
         }
     }
 
-    fn write_holder(&mut self, holder: &LockHolder) -> ProfileResult<()> {
-        use std::io::{Seek, SeekFrom, Write};
+    fn write_holder(&self, holder: &LockHolder) -> ProfileResult<()> {
         let encoded = serde_json::to_vec(holder).unwrap_or_default();
-        self.file
-            .set_len(0)
-            .map_err(|e| ProfileError::io("update the profile lock", e))?;
-        self.file
-            .seek(SeekFrom::Start(0))
-            .map_err(|e| ProfileError::io("update the profile lock", e))?;
-        self.file
-            .write_all(&encoded)
-            .map_err(|e| ProfileError::io("update the profile lock", e))?;
-        self.file
-            .flush()
-            .map_err(|e| ProfileError::io("update the profile lock", e))?;
-        Ok(())
+        std::fs::write(&self.holder_path, &encoded)
+            .map_err(|e| ProfileError::io("update the profile lock record", e))
+    }
+}
+
+impl Drop for ProfileLock {
+    fn drop(&mut self) {
+        // Best effort, and deliberately after the lock's own release: the
+        // record is advisory, and a stale one is harmless because `is_locked`
+        // never consults it. Removing it on a clean release is what makes a
+        // surviving record mean "the last run crashed".
+        let _ = std::fs::remove_file(&self.holder_path);
     }
 }
 
@@ -177,7 +207,10 @@ mod tests {
 
         match ProfileLock::acquire(&profile) {
             Err(ProfileError::AlreadyRunning { holder }) => {
-                let holder = holder.expect("the holder is recorded");
+                // The record has to be readable *while* the lock is held. On
+                // Windows a file lock is mandatory, so a record stored inside
+                // the locked file would be unreadable here.
+                let holder = holder.expect("the holder is recorded and readable while locked");
                 assert_eq!(holder.manager_pid, std::process::id());
             }
             Ok(_) => panic!("two sessions must not hold the same profile"),
@@ -218,9 +251,11 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let profile = dir.path().join("profile");
         std::fs::create_dir_all(&profile).expect("mkdir");
-        // A stale file with a plausible but dead holder, as a crash would leave.
+        // A stale lock file and a stale record naming a dead process, as a
+        // crash would leave.
+        std::fs::write(profile.join(ProfileLock::FILE_NAME), b"").expect("write");
         std::fs::write(
-            profile.join(ProfileLock::FILE_NAME),
+            profile.join(ProfileLock::HOLDER_FILE_NAME),
             br#"{"manager_pid":999999,"browser_pid":999998,"acquired_at":1}"#,
         )
         .expect("write");
@@ -238,16 +273,49 @@ mod tests {
     }
 
     #[test]
-    fn a_corrupt_lock_file_does_not_prevent_locking() {
+    fn a_corrupt_holder_record_does_not_prevent_locking() {
         let dir = tempfile::tempdir().expect("tempdir");
         let profile = dir.path().join("profile");
         std::fs::create_dir_all(&profile).expect("mkdir");
-        std::fs::write(profile.join(ProfileLock::FILE_NAME), b"not json").expect("write");
+        std::fs::write(profile.join(ProfileLock::HOLDER_FILE_NAME), b"not json").expect("write");
         assert_eq!(ProfileLock::read_holder(&profile), None);
         let _lock = ProfileLock::acquire(&profile).expect("lock");
         assert!(
             ProfileLock::read_holder(&profile).is_some(),
-            "the holder is rewritten"
+            "the record is rewritten"
+        );
+    }
+
+    #[test]
+    fn the_lock_file_itself_stays_empty_so_the_record_is_readable() {
+        // Windows file locks are mandatory: while a range is locked no other
+        // handle can read it, not even one in the same process. Anything
+        // written into the lock file would therefore be unreadable exactly when
+        // it matters. Keeping it empty is what makes the record readable at
+        // all, and this test guards a Windows-only failure the Linux
+        // development host could not reproduce.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let profile = dir.path().join("profile");
+        let lock = ProfileLock::acquire(&profile).expect("lock");
+        assert_eq!(std::fs::metadata(lock.path()).expect("metadata").len(), 0);
+        assert!(lock.holder_path().is_file());
+        assert!(
+            ProfileLock::read_holder(&profile).is_some(),
+            "readable while the lock is held"
+        );
+    }
+
+    #[test]
+    fn releasing_the_lock_clears_the_holder_record() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let profile = dir.path().join("profile");
+        let lock = ProfileLock::acquire(&profile).expect("lock");
+        assert!(ProfileLock::read_holder(&profile).is_some());
+        drop(lock);
+        assert_eq!(
+            ProfileLock::read_holder(&profile),
+            None,
+            "a record that survives a clean release would look like a crash"
         );
     }
 

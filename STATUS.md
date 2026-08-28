@@ -15,7 +15,7 @@ Everything below was run and its output observed on the development host
 ```text
 cargo fmt --all -- --check                                 clean
 cargo clippy --workspace --all-targets --locked -- -D warnings   clean
-cargo test --workspace --locked                            410 passed, 0 failed
+cargo test --workspace --locked                            413 passed, 0 failed
 npm ci && npm run lint                                     clean
 npm run typecheck                                          clean
 npm test                                                   14 passed
@@ -33,7 +33,7 @@ Tests by crate:
 | `tw-otp` | 28 | RFC 4226 appendix D and RFC 6238 appendix B vectors, `otpauth://` parsing |
 | `tw-qr` | 11 | Real QR images built from synthetic credentials, decode limits, payload discretion |
 | `tw-thorium` | 51 | Release selection, bounded download, archive validation, install/rollback end to end |
-| `tw-browser-profile` | 33 | Locking, launch plan, CDP parsing, profile isolation against a stand-in browser |
+| `tw-browser-profile` | 36 | Locking, launch plan, CDP parsing, profile isolation against a stand-in browser |
 | `tw-windows-platform` | 19 | Instance naming and exclusion, process spawn and liveness |
 | `tw-controller` | 90 | Bootstrap, clipboard rule, account lifecycle, backup, diagnostics redaction |
 | `thorium-workspace` | 3 | Command-boundary state handling |
@@ -63,7 +63,21 @@ CI performs all of them on `windows-latest`:
 | `tw-storage` cross-target check | `rusqlite`'s bundled SQLite needs a C toolchain the Linux host lacks for that target |
 
 **Nothing in this repository claims these have passed.** CI is the first place
-they run.
+they run — and the first run found a real Windows-only bug, which is recorded
+below.
+
+### What the first Windows CI run found
+
+Four `ProfileLock` tests failed on Windows and passed on Linux. Windows file
+locks are *mandatory*: while a range is locked, no other handle can read it, not
+even one in the same process. The holder record was stored inside the locked
+file, so it was unreadable exactly when it mattered — while something held the
+lock — and the UI could never have told a user which process was using a
+profile.
+
+The record now lives in a separate file beside the lock, which stays empty.
+Three tests were added to pin the property, including one that asserts the lock
+file is empty and the record is readable while the lock is held.
 
 ## Not yet verified anywhere
 
@@ -149,4 +163,4 @@ no migration, and a test asserts v1.0.0 never writes to it.
 | TypeScript / TSX | 4,883 lines |
 | `unsafe` blocks | 28 blocks + 4 `unsafe impl` + 1 `unsafe extern fn`, all in `tw-windows-platform`, each documented |
 | Diagnostic codes | 50 |
-| Tests | 410 Rust, 14 frontend |
+| Tests | 413 Rust, 14 frontend |

@@ -268,9 +268,13 @@ pub struct RecoveryReport {
 /// Reconciles observed runtime state with reality at startup.
 ///
 /// Every row in the runtime table describes a process supervised by a manager
-/// that is no longer running, so all of them are cleared. Lock files are
-/// inspected but never deleted: the operating system releases the lock when the
-/// holder dies, and a file that is still locked belongs to a live process.
+/// that is no longer running, so all of them are cleared.
+///
+/// A profile's *holder record* is removed when its lock is released cleanly, so
+/// one that survives means a previous run ended without releasing — a crash.
+/// It is counted and reported, never deleted: the operating system releases the
+/// lock itself when a holder dies, so a leftover record is informational, and a
+/// profile whose lock is still held belongs to a live process.
 ///
 /// # Errors
 ///
@@ -281,8 +285,8 @@ pub fn recover_runtime_state(db: &Database, workspace_root: &Path) -> AppResult<
     let mut stale_locks_found = 0usize;
     for profile in ProfileRepo::list(db.connection())? {
         let layout = ProfileLayout::new(workspace_root, &profile);
-        let lock_file = layout.profile_dir.join(ProfileLock::FILE_NAME);
-        if lock_file.is_file() && !ProfileLock::is_locked(&layout.profile_dir) {
+        let holder_record = layout.profile_dir.join(ProfileLock::HOLDER_FILE_NAME);
+        if holder_record.is_file() && !ProfileLock::is_locked(&layout.profile_dir) {
             stale_locks_found += 1;
         }
     }
@@ -430,18 +434,36 @@ mod tests {
         )
         .expect("stale row");
 
-        // A lock file a crash left behind, with nothing holding it.
+        // A holder record a crash left behind, with nothing holding the lock.
         let layout = ProfileLayout::new(dir.path(), &profile);
         std::fs::create_dir_all(&layout.profile_dir).expect("mkdir");
-        std::fs::write(layout.profile_dir.join(ProfileLock::FILE_NAME), b"{}").expect("write");
+        std::fs::write(layout.profile_dir.join(ProfileLock::FILE_NAME), b"").expect("write");
+        std::fs::write(layout.profile_dir.join(ProfileLock::HOLDER_FILE_NAME), b"{}").expect("write");
 
         let report = recover_runtime_state(&db, dir.path()).expect("recover");
         assert_eq!(report.stale_sessions_cleared, 1);
         assert_eq!(report.stale_locks_found, 1);
         assert!(RuntimeRepo::list(db.connection()).expect("list").is_empty());
         assert!(
-            layout.profile_dir.join(ProfileLock::FILE_NAME).is_file(),
+            layout.profile_dir.join(ProfileLock::HOLDER_FILE_NAME).is_file(),
             "recovery must not delete files it does not own the lifetime of"
+        );
+    }
+
+    #[test]
+    fn a_cleanly_released_profile_is_not_reported_as_stale() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut db = Database::open_in_memory().expect("db");
+        let profile = create_profile(&mut db, &draft("Work")).expect("create");
+        let layout = ProfileLayout::new(dir.path(), &profile);
+
+        // Run and release the profile normally.
+        drop(ProfileLock::acquire(&layout.profile_dir).expect("lock"));
+
+        let report = recover_runtime_state(&db, dir.path()).expect("recover");
+        assert_eq!(
+            report.stale_locks_found, 0,
+            "a lock file left by a clean run is not evidence of a crash"
         );
     }
 

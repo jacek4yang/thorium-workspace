@@ -118,7 +118,16 @@ impl ProfileLock {
                 let _ = file.unlock();
                 false
             }
-            Err(_) => true,
+            Err(std::fs::TryLockError::WouldBlock) => true,
+            // A lock call can fail for reasons that have nothing to do with
+            // contention. This is an advisory observation, so an unanswerable
+            // question is reported as "not locked" rather than inventing a
+            // holder that may not exist; `acquire` is what actually enforces
+            // exclusion, and it distinguishes the two cases.
+            Err(std::fs::TryLockError::Error(error)) => {
+                tracing::debug!(error = %error, "a profile lock could not be tested");
+                false
+            }
         }
     }
 

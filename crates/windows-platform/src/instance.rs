@@ -120,10 +120,15 @@ impl SingleInstanceGuard {
             .open(&path)
             .map_err(|e| PlatformError::io("create the instance lock file", e))?;
         // `File::try_lock` is the standard library's own advisory lock, so no
-        // third-party dependency is needed for the development fallback.
+        // third-party dependency is needed for the development fallback. Only
+        // contention means another instance holds the workspace; any other
+        // failure is an I/O problem and is reported as one.
         match file.try_lock() {
             Ok(()) => Ok(Self { name, _lock: file }),
-            Err(_) => Err(PlatformError::AlreadyRunning),
+            Err(std::fs::TryLockError::WouldBlock) => Err(PlatformError::AlreadyRunning),
+            Err(std::fs::TryLockError::Error(error)) => {
+                Err(PlatformError::io("take the instance lock", error))
+            }
         }
     }
 }

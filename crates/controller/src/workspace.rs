@@ -614,10 +614,15 @@ impl Workspace {
 
     /// Looks up the newest installable release.
     ///
+    /// Takes `&mut self` rather than `&self` so the returned future borrows the
+    /// workspace mutably. `Workspace` owns a SQLite connection, which is `Send`
+    /// but not `Sync`, so a future holding `&Workspace` could not be sent to
+    /// another thread and could not be awaited from a Tauri command.
+    ///
     /// # Errors
     ///
     /// See [`tw_thorium::ThoriumError`].
-    pub async fn check_for_thorium_update(&self) -> AppResult<tw_domain::ThoriumRelease> {
+    pub async fn check_for_thorium_update(&mut self) -> AppResult<tw_domain::ThoriumRelease> {
         crate::thorium::check_for_update(&self.thorium, self.settings.thorium_channel).await
     }
 

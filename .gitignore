@@ -45,3 +45,6 @@ coverage/
 
 # Cargo build artifacts inside crates
 crates/*/target/
+
+# Tauri generated schemas
+src-tauri/gen/

@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The smallest set of permissions the Thorium Workspace window needs. The frontend is presentation only: it can open a file picker, show a message, reveal a file in Explorer and open an https:// page. It cannot read or write files, run processes, or reach the network itself; everything else goes through a typed Rust command.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "dialog:allow-confirm",
+    "dialog:allow-ask",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://*" }]
+    },
+    "opener:allow-reveal-item-in-dir"
+  ]
+}

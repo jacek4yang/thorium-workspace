@@ -12,6 +12,7 @@
 #![cfg(unix)]
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use tw_browser_profile::{BrowserSession, ProfileError, ProfileLayout, ProfileLock};
 use tw_domain::{BrowserProfile, LocaleTag, ProfileId, ThoriumSelection, TimeZoneId, Timestamp};
@@ -58,19 +59,46 @@ sleep 300
 }
 
 /// Waits for the stand-in browser to record `expected` launches against a
-/// directory. The browser writes its log after the launch call returns, so
-/// reading immediately would race it.
+/// directory.
+///
+/// The browser writes its log after the launch call returns, so reading
+/// immediately would race it. The budget is deliberately generous: the whole
+/// workspace test suite runs in parallel on a small number of cores, and a
+/// freshly forked shell can wait a while to be scheduled. A tight budget here
+/// produces a flaky test, not a faster one.
+const LAUNCH_TIMEOUT: Duration = Duration::from_secs(30);
+
 async fn wait_for_launches(user_data_dir: &Path, expected: usize) -> String {
     let log = user_data_dir.join("launches.log");
-    for _ in 0..200 {
+    let deadline = tokio::time::Instant::now() + LAUNCH_TIMEOUT;
+    while tokio::time::Instant::now() < deadline {
         if let Ok(contents) = std::fs::read_to_string(&log)
             && contents.lines().count() >= expected
         {
             return contents;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        tokio::time::sleep(Duration::from_millis(25)).await;
     }
-    panic!("the stand-in browser did not record {expected} launch(es) against {user_data_dir:?}");
+    panic!(
+        "the stand-in browser did not record {expected} launch(es) against {user_data_dir:?} \
+         within {LAUNCH_TIMEOUT:?}"
+    );
+}
+
+/// Waits for a process to disappear.
+///
+/// `BrowserSession::stop` documents its own wait as best effort - it must not
+/// hang the application if a browser is slow to die - so the test polls rather
+/// than asserting on an exact instant.
+async fn wait_for_exit(pid: u32) -> bool {
+    let deadline = tokio::time::Instant::now() + LAUNCH_TIMEOUT;
+    while tokio::time::Instant::now() < deadline {
+        if !tw_windows_platform::process_is_running(pid) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    false
 }
 
 fn profile(name: &str, locale: &str, timezone: &str) -> BrowserProfile {
@@ -173,8 +201,8 @@ async fn stopping_a_session_releases_the_profile_for_relaunch() {
         "stopping must release the profile"
     );
     assert!(
-        !tw_windows_platform::process_is_running(first_pid),
-        "the browser process must be gone"
+        wait_for_exit(first_pid).await,
+        "the browser process must be gone after the session is stopped"
     );
 
     let again = BrowserSession::launch(&browser, workspace.path(), &p, "M152")

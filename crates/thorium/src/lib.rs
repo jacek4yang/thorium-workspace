@@ -5,3 +5,13 @@
 //! `browsers/thorium/versions/<version>/`.
 
 #![forbid(unsafe_code)]
+
+pub mod catalog;
+pub mod error;
+pub mod install;
+pub mod releases;
+
+pub use catalog::{Variant, WINDOWS_PORTABLE_ZIP_PATTERN};
+pub use error::ThoriumError;
+pub use install::InstallLayout;
+pub use releases::{Client, Release};

@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Portable release build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build portable executable (frontend embedded, no bundler)
+        run: pnpm tauri build --no-bundle
+
+      - name: Locate built executable
+        id: locate
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "target/release/*.exe" |
+            Where-Object { $_.Name -notlike "*-bin" -and $_.Name -notlike "*.d" } |
+            Where-Object { $_.Name -in @("ThoriumWorkspace.exe", "thorium-workspace.exe") } |
+            Select-Object -First 1
+          if (-not $exe) {
+            Get-ChildItem "target/release" | ForEach-Object { Write-Host $_.Name }
+            throw "built executable not found"
+          }
+          "path=$($exe.FullName)" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Name and hash artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $name = "ThoriumWorkspace-v$version-x86_64.exe"
+          $dest = "ThoriumWorkspace-v$version-x86_64.exe"
+          Copy-Item "${{ steps.locate.outputs.path }}" $dest
+          $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name" | Out-File -Encoding ascii "$dest.sha256"
+          "name=$name" | Out-File -Append $env:GITHUB_OUTPUT
+          "hash=$hash" | Out-File -Append $env:GITHUB_OUTPUT
+          Get-Content "$dest.sha256"
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ThoriumWorkspace-v*-x86_64.exe
+            ThoriumWorkspace-v*-x86_64.exe.sha256
+          fail_on_unmatched_files: true

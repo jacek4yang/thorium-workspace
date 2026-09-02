@@ -14,6 +14,7 @@ use std::io::Cursor;
 
 use image::ImageReader;
 use rqrr::{DeQRError, PreparedImage};
+use thorium_workspace_domain::DiagnosticCode;
 
 /// Typed QR decoding errors. No variant carries the (potentially secret)
 /// payload or raw image bytes.
@@ -39,6 +40,17 @@ pub enum QrError {
 impl From<DeQRError> for QrError {
     fn from(_: DeQRError) -> Self {
         Self::Decode
+    }
+}
+
+impl DiagnosticCode for QrError {
+    fn diagnostic_code(&self) -> &'static str {
+        match self {
+            Self::InvalidImage => "QR_INVALID_IMAGE",
+            Self::Decode => "QR_DECODE_FAILED",
+            Self::NoCodeFound => "QR_NO_CODE_FOUND",
+            Self::MultipleCodes { .. } => "QR_MULTIPLE_CODES",
+        }
     }
 }
 

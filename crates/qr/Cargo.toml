@@ -8,6 +8,7 @@ repository.workspace = true
 description = "QR decoding for 2FA imports (image bytes to otpauth payload)"
 
 [dependencies]
+thorium-workspace-domain.workspace = true
 image.workspace = true
 rqrr.workspace = true
 thiserror.workspace = true

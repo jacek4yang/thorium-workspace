@@ -179,6 +179,21 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// Loads one factor by id.
+    pub fn get_factor(&self, id: FactorId) -> Result<Option<SecondFactor>, StorageError> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, account_id, kind, label, issuer, account_label, algorithm, digits,
+                    period_seconds, counter, secret_ref, external_note, created_at
+             FROM factors
+             WHERE id = ?1",
+        )?;
+        let mut rows = statement.query(params![id.to_string()])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(factor_from_row(row)?)),
+            None => Ok(None),
+        }
+    }
+
     /// Loads the factors of one account, ordered by creation time.
     pub fn list_factors(&self, account_id: AccountId) -> Result<Vec<SecondFactor>, StorageError> {
         let mut statement = self.conn.prepare(
@@ -236,6 +251,24 @@ impl Store {
             codes.push(code_from_row(row)?);
         }
         Ok(codes)
+    }
+
+    /// Returns the owning account of a recovery code slot.
+    pub fn recovery_code_owner(
+        &self,
+        id: RecoveryCodeId,
+    ) -> Result<Option<AccountId>, StorageError> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT account_id FROM recovery_codes WHERE id = ?1")?;
+        let mut rows = statement.query(params![id.to_string()])?;
+        match rows.next()? {
+            Some(row) => {
+                let text: String = row.get(0)?;
+                Ok(Some(parse_id(&text, "recovery_codes.account_id")?))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Marks a recovery code used. Idempotent: the first timestamp wins,
@@ -670,6 +703,18 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn get_factor_by_id_roundtrips() {
+        let (_dir, store, account) = store_with_account("get-factor");
+        let factor = &account.factors[0];
+        let loaded = store
+            .get_factor(factor.id)
+            .expect("query")
+            .expect("present");
+        assert_eq!(loaded, *factor);
+        assert!(store.get_factor(FactorId::new()).expect("query").is_none());
+    }
+
+    #[test]
     fn factor_crud_and_counter_updates() {
         let (_dir, store, account) = store_with_account("factors");
         let hotp_id = FactorId::new();
@@ -729,6 +774,22 @@ pub(crate) mod tests {
             .find(|factor| factor.id == totp.id)
             .expect("totp present");
         assert!(unchanged.counter.is_none());
+    }
+
+    #[test]
+    fn recovery_code_owner_resolves() {
+        let (_dir, store, account) = store_with_account("owner");
+        let code = &account.recovery_codes[0];
+        assert_eq!(
+            store.recovery_code_owner(code.id).expect("query"),
+            Some(account.id)
+        );
+        assert!(
+            store
+                .recovery_code_owner(RecoveryCodeId::new())
+                .expect("query")
+                .is_none()
+        );
     }
 
     #[test]

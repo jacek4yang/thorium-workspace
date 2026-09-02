@@ -5,14 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Browser profile launching, isolation, and CDP-based overrides"
+description = "Browser profile launching, isolation, and process supervision"
 
 [dependencies]
-futures-util.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
-tokio-tungstenite.workspace = true
+uuid.workspace = true
 thorium-workspace-domain.workspace = true
 thorium-workspace-windows-platform.workspace = true

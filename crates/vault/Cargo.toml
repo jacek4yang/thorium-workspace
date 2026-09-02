@@ -10,10 +10,15 @@ description = "Versioned encrypted vault for account secrets"
 [dependencies]
 argon2.workspace = true
 chacha20poly1305.workspace = true
+chrono.workspace = true
+data-encoding.workspace = true
 rand.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
+thorium-workspace-domain.workspace = true
+thorium-workspace-secrets.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

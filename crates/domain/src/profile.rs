@@ -158,6 +158,26 @@ impl BrowserProfile {
     pub fn user_data_rel_path_for(id: ProfileId) -> String {
         format!("profiles/{}/User Data", id.as_uuid())
     }
+
+    /// Creates a new profile from validated input, assigning a fresh id,
+    /// the derived user data path, and creation timestamps.
+    pub fn from_validated(validated: ValidatedProfileInput) -> Self {
+        let now = Utc::now();
+        let id = ProfileId::new();
+        Self {
+            id,
+            name: validated.name,
+            thorium_version: validated.thorium_version,
+            user_data_rel_path: Self::user_data_rel_path_for(id),
+            startup_urls: validated.startup_urls,
+            locale: validated.locale,
+            timezone: validated.timezone,
+            account_ids: Vec::new(),
+            created_at: now,
+            updated_at: now,
+            last_launched_at: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -213,6 +233,19 @@ mod tests {
         assert_ne!(a, b);
         assert!(a.starts_with("profiles/"));
         assert!(a.ends_with("/User Data"));
+    }
+
+    #[test]
+    fn from_validated_assigns_identity_and_paths() {
+        let profile = BrowserProfile::from_validated(input().validate().expect("valid"));
+        assert_eq!(profile.name, "Test Profile A");
+        assert_eq!(
+            profile.user_data_rel_path,
+            BrowserProfile::user_data_rel_path_for(profile.id)
+        );
+        assert_eq!(profile.created_at, profile.updated_at);
+        assert!(profile.last_launched_at.is_none());
+        assert!(profile.account_ids.is_empty());
     }
 
     #[test]

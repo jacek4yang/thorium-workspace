@@ -1,0 +1,22 @@
+[package]
+name = "thorium-workspace-windows-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Windows platform layer: named mutexes, file locks, Job Objects, hidden-console process spawning"
+
+[target.'cfg(windows)'.dependencies]
+arboard.workspace = true
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true

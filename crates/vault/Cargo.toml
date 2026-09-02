@@ -1,0 +1,19 @@
+[package]
+name = "thorium-workspace-vault"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Versioned encrypted vault for account secrets"
+
+[dependencies]
+argon2.workspace = true
+chacha20poly1305.workspace = true
+rand.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

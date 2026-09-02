@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ThoriumWorkspace",
+  "mainBinaryName": "ThoriumWorkspace",
+  "version": "1.0.0",
+  "identifier": "com.thoriumworkspace.app",
+  "build": {
+    "beforeDevCommand": "pnpm --dir app dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm --dir app build",
+    "frontendDist": "../app/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Thorium Workspace",
+        "label": "main",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 940,
+        "minHeight": 620,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [],
+    "icon": ["icons/icon.ico"]
+  }
+}

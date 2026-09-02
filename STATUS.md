@@ -27,6 +27,14 @@ accurately from this state.
 | `qr` | done | rqrr decode from PNG/JPEG; single/multiple/no-code semantics; payload never logged (5 tests with synthetic otpauth QR fixtures) |
 | `thorium` | done | catalog verified against live GitHub API 2026-09-02 (portable zips `Thorium_<VARIANT>_<VERSION>.zip`; `gz83/thorium` carries current builds, `Alex313031/Thorium` M144+ tags are stubs); rustls discovery; bounded streaming download (`.part` + rename); staging extract with zip-slip guard; atomic promote; `current` marker; delete protection (11 tests + 1 ignored live test, verified passing through the dev proxy) |
 
+All seven UI sections are functional (commit fa23b60): Dashboard, Profiles,
+Accounts (passwords, TOTP/HOTP with QR import, recovery codes), Browser
+(Thorium discovery/install with progress, current/delete management), Vault,
+Settings (persisted + live-applied), Diagnostics. Thorium install flow:
+discover -> bounded download (2 GiB / 30 min budget, progress events) ->
+zip-slip-guarded staged extract -> atomic promote -> registry + current
+selection; delete protects current/running versions.
+
 `crates/controller` is implemented and tested (commit cd8a1fd): Workspace
 bootstrap (portable root + layout + single-instance mutex/registry + stale
 temp recovery), vault lifecycle, profile service (eager `profiles/<uuid>/User
@@ -60,15 +68,16 @@ Dashboard pages are placeholders in the UI.
 
 ## Remaining work for v1.0.0 (ordered)
 
-1. Manual GUI checkpoint: profile persistence across restart (in progress).
-2. Accounts page + password/OTP/recovery UI (backend commands ready).
-3. CDP timezone/locale emulation (loopback-only, ephemeral port,
+1. Manual GUI checkpoint: profile persistence across restart (vault
+   persistence already observed live on 2026-09-03; profile creation +
+   restart pending user confirmation).
+2. CDP timezone/locale emulation (loopback-only, ephemeral port,
    DevToolsActivePort handshake) — the supported mechanism per contract;
    no deprecated CLI timezone flags.
-4. Backup/recovery of metadata+vault.
-5. Two-profile E2E with real Thorium on this machine (download 350 MB
-   asset, run Test Profile A/B).
-6. Release workflow (`v*` tag → portable EXE + sha256 artifact).
+3. Backup/recovery of metadata+vault.
+4. Two-profile E2E with real Thorium (Browser page now supports the full
+   install flow; ~350 MB asset).
+5. Release workflow (`v*` tag → portable EXE + sha256 artifact).
 
 ## Manual test checkpoint (when controller exists)
 

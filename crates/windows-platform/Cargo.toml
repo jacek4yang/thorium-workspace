@@ -9,6 +9,9 @@ description = "Windows platform layer: named mutexes, file locks, Job Objects, h
 
 [target.'cfg(windows)'.dependencies]
 arboard.workspace = true
+thiserror.workspace = true
+thorium-workspace-domain.workspace = true
+thorium-workspace-secrets.workspace = true
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",

@@ -4766,6 +4766,9 @@ version = "1.0.0"
 dependencies = [
  "arboard",
  "tempfile",
+ "thiserror 2.0.20",
+ "thorium-workspace-domain",
+ "thorium-workspace-secrets",
  "windows-sys 0.61.2",
 ]
 

@@ -12,7 +12,9 @@ use std::str::FromStr;
 use crate::error::DomainError;
 
 /// Reference to a secret stored in the encrypted vault.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct SecretRef(String);
 
@@ -51,10 +53,7 @@ impl FromStr for SecretRef {
         if s.is_empty() || s.len() > 200 || s.chars().any(|c| c.is_control() || c.is_whitespace()) {
             return Err(DomainError::InvalidId);
         }
-        if !s.starts_with("account/")
-            && !s.starts_with("factor/")
-            && !s.starts_with("recovery/")
-        {
+        if !s.starts_with("account/") && !s.starts_with("factor/") && !s.starts_with("recovery/") {
             return Err(DomainError::InvalidId);
         }
         Ok(Self(s.to_owned()))

@@ -3,8 +3,6 @@
 //! Diagnostic codes are stable identifiers surfaced to the UI diagnostics
 //! page and error displays. They must never embed secret material.
 
-use std::fmt;
-
 /// Marker trait implemented by error types that expose stable diagnostic
 /// codes.
 pub trait DiagnosticCode {

@@ -10,8 +10,8 @@ description = "RFC 4226 HOTP and RFC 6238 TOTP with otpauth:// URI support"
 [dependencies]
 data-encoding.workspace = true
 hmac.workspace = true
-secrecy.workspace = true
-serde.workspace = true
 sha1.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+thorium-workspace-domain.workspace = true
+thorium-workspace-secrets.workspace = true

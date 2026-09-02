@@ -125,8 +125,10 @@ pub fn validate_factor_params(
         FactorKind::ExternalAuthenticator => Ok(()),
         FactorKind::Totp | FactorKind::Hotp => {
             let algorithm = algorithm.ok_or(DomainError::OutOfRange { field: "algorithm" })?;
-            if !matches!(algorithm, OtpAlgorithm::Sha1 | OtpAlgorithm::Sha256 | OtpAlgorithm::Sha512)
-            {
+            if !matches!(
+                algorithm,
+                OtpAlgorithm::Sha1 | OtpAlgorithm::Sha256 | OtpAlgorithm::Sha512
+            ) {
                 return Err(DomainError::OutOfRange { field: "algorithm" });
             }
             if !matches!(digits, Some(6) | Some(8)) {
@@ -149,7 +151,11 @@ mod tests {
 
     #[test]
     fn factor_kinds_roundtrip() {
-        for kind in [FactorKind::Totp, FactorKind::Hotp, FactorKind::ExternalAuthenticator] {
+        for kind in [
+            FactorKind::Totp,
+            FactorKind::Hotp,
+            FactorKind::ExternalAuthenticator,
+        ] {
             let rebuilt = FactorKind::from_id(kind.id()).expect("roundtrip");
             assert_eq!(kind, rebuilt);
         }
@@ -157,7 +163,11 @@ mod tests {
 
     #[test]
     fn algorithms_roundtrip() {
-        for algorithm in [OtpAlgorithm::Sha1, OtpAlgorithm::Sha256, OtpAlgorithm::Sha512] {
+        for algorithm in [
+            OtpAlgorithm::Sha1,
+            OtpAlgorithm::Sha256,
+            OtpAlgorithm::Sha512,
+        ] {
             let rebuilt = OtpAlgorithm::from_id(algorithm.id()).expect("roundtrip");
             assert_eq!(algorithm, rebuilt);
         }
@@ -167,18 +177,33 @@ mod tests {
     #[test]
     fn totp_params_validate() {
         assert!(
-            validate_factor_params(FactorKind::Totp, Some(OtpAlgorithm::Sha1), Some(6), Some(30))
-                .is_ok()
+            validate_factor_params(
+                FactorKind::Totp,
+                Some(OtpAlgorithm::Sha1),
+                Some(6),
+                Some(30)
+            )
+            .is_ok()
         );
         assert!(
-            validate_factor_params(FactorKind::Totp, Some(OtpAlgorithm::Sha512), Some(8), Some(60))
-                .is_ok()
+            validate_factor_params(
+                FactorKind::Totp,
+                Some(OtpAlgorithm::Sha512),
+                Some(8),
+                Some(60)
+            )
+            .is_ok()
         );
         // Missing algorithm, bad digits, bad period.
         assert!(validate_factor_params(FactorKind::Totp, None, Some(6), Some(30)).is_err());
         assert!(
-            validate_factor_params(FactorKind::Totp, Some(OtpAlgorithm::Sha1), Some(7), Some(30))
-                .is_err()
+            validate_factor_params(
+                FactorKind::Totp,
+                Some(OtpAlgorithm::Sha1),
+                Some(7),
+                Some(30)
+            )
+            .is_err()
         );
         assert!(
             validate_factor_params(FactorKind::Totp, Some(OtpAlgorithm::Sha1), Some(6), Some(0))
@@ -206,6 +231,8 @@ mod tests {
 
     #[test]
     fn external_authenticator_has_no_parameter_requirements() {
-        assert!(validate_factor_params(FactorKind::ExternalAuthenticator, None, None, None).is_ok());
+        assert!(
+            validate_factor_params(FactorKind::ExternalAuthenticator, None, None, None).is_ok()
+        );
     }
 }

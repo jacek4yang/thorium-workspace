@@ -107,6 +107,6 @@ mod tests {
         let id = AccountId::new();
         let json = serde_json::to_string(&id).expect("serializable");
         assert!(json.starts_with('"'));
-        assert!(json.contains(id.as_uuid().hyphenated().to_string()));
+        assert!(json.contains(&id.as_uuid().hyphenated().to_string()));
     }
 }

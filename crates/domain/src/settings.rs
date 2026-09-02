@@ -1,0 +1,119 @@
+//! Thorium installation records and workspace settings.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+use crate::error::DomainError;
+
+/// A Thorium version installed under `browsers/thorium/versions/<version>/`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThoriumInstall {
+    /// Version tag, e.g. `M152.0.7977.55`.
+    pub version: String,
+    /// Build variant, e.g. `AVX2` (see the thorium crate for the catalog).
+    pub variant: String,
+    /// When the install completed.
+    pub installed_at: DateTime<Utc>,
+    /// Path of the install directory relative to the workspace root
+    /// (e.g. `browsers/thorium/versions/M152.0.7977.55`).
+    pub rel_path: String,
+}
+
+/// Theme preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemePreference {
+    /// Follow the OS theme.
+    #[default]
+    System,
+    /// Always light.
+    Light,
+    /// Always dark.
+    Dark,
+}
+
+/// Workspace-level settings (non-secret).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSettings {
+    /// Seconds before the clipboard is cleared after copying a secret.
+    /// Must be between 5 and 120.
+    pub clipboard_clear_seconds: u32,
+    /// Idle minutes before the vault auto-locks; `None` disables.
+    /// Must be between 1 and 240 when set.
+    pub vault_idle_lock_minutes: Option<u32>,
+    /// Lock the vault when the main window is minimized.
+    pub vault_lock_on_minimize: bool,
+    /// UI theme preference.
+    pub theme: ThemePreference,
+    /// Preferred Thorium build variant for new installs (e.g. `AVX2`).
+    pub preferred_thorium_variant: String,
+}
+
+impl Default for WorkspaceSettings {
+    fn default() -> Self {
+        Self {
+            clipboard_clear_seconds: 20,
+            vault_idle_lock_minutes: Some(10),
+            vault_lock_on_minimize: false,
+            theme: ThemePreference::System,
+            preferred_thorium_variant: "AVX2".to_owned(),
+        }
+    }
+}
+
+impl WorkspaceSettings {
+    /// Validates the settings.
+    pub fn validate(&self) -> Result<(), DomainError> {
+        if !(5..=120).contains(&self.clipboard_clear_seconds) {
+            return Err(DomainError::OutOfRange {
+                field: "clipboardClearSeconds",
+            });
+        }
+        if let Some(minutes) = self.vault_idle_lock_minutes {
+            if !(1..=240).contains(&minutes) {
+                return Err(DomainError::OutOfRange {
+                    field: "vaultIdleLockMinutes",
+                });
+            }
+        }
+        if self.preferred_thorium_variant.trim().is_empty() {
+            return Err(DomainError::OutOfRange {
+                field: "preferredThoriumVariant",
+            });
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_settings_are_valid() {
+        assert!(WorkspaceSettings::default().validate().is_ok());
+    }
+
+    #[test]
+    fn settings_ranges_are_enforced() {
+        let mut settings = WorkspaceSettings {
+            clipboard_clear_seconds: 2,
+            ..WorkspaceSettings::default()
+        };
+        assert!(settings.validate().is_err());
+        settings.clipboard_clear_seconds = 300;
+        assert!(settings.validate().is_err());
+
+        let mut settings = WorkspaceSettings {
+            vault_idle_lock_minutes: Some(0),
+            ..WorkspaceSettings::default()
+        };
+        assert!(settings.validate().is_err());
+        settings.vault_idle_lock_minutes = Some(60);
+        assert!(settings.validate().is_ok());
+        settings.vault_idle_lock_minutes = None;
+        assert!(settings.validate().is_ok());
+    }
+}

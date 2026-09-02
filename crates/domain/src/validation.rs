@@ -118,16 +118,15 @@ impl LocaleTag {
         let trimmed = value.trim();
         let valid = !trimmed.is_empty()
             && trimmed.len() <= 35
+            && trimmed.split('-').all(|part| {
+                !part.is_empty()
+                    && part.len() <= 8
+                    && part.chars().all(|c| c.is_ascii_alphanumeric())
+            })
             && trimmed
-                .split('-')
-                .all(|part| {
-                    !part.is_empty()
-                        && part.len() <= 8
-                        && part
-                            .chars()
-                            .all(|c| c.is_ascii_alphanumeric())
-                })
-            && trimmed.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic());
         if !valid {
             return Err(DomainError::InvalidLocale);
         }
@@ -141,6 +140,9 @@ impl LocaleTag {
 }
 
 /// Normalizes and validates a tag list.
+///
+/// Tags are deduplicated case-insensitively, keeping the casing of the
+/// first occurrence.
 pub fn normalize_tags(tags: &[String]) -> Result<Vec<String>, DomainError> {
     let mut normalized: Vec<String> = Vec::new();
     for tag in tags {
@@ -151,7 +153,10 @@ pub fn normalize_tags(tags: &[String]) -> Result<Vec<String>, DomainError> {
         if trimmed.chars().any(|c| c.is_control()) || trimmed.len() > 50 {
             return Err(DomainError::InvalidTag);
         }
-        if !normalized.iter().any(|existing| existing == trimmed) {
+        let already_present = normalized
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(trimmed));
+        if !already_present {
             normalized.push(trimmed.to_owned());
         }
         if normalized.len() > TAGS_MAX {
@@ -166,7 +171,10 @@ pub fn validate_notes(notes: &str) -> Result<(), DomainError> {
     if notes.chars().count() > NOTES_MAX {
         return Err(DomainError::OutOfRange { field: "notes" });
     }
-    if notes.chars().any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+    if notes
+        .chars()
+        .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+    {
         return Err(DomainError::ControlCharacters);
     }
     Ok(())

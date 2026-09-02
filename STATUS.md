@@ -1,6 +1,6 @@
 # Implementation Status — v1.0.0 branch
 
-Last updated: 2026-09-02. Branch: `feature/v1.0.0-implementation`.
+Last updated: 2026-09-03. Branch: `feature/v1.0.0-implementation`.
 This file is the hand-off contract: a new agent should be able to resume
 accurately from this state.
 
@@ -27,8 +27,27 @@ accurately from this state.
 | `qr` | done | rqrr decode from PNG/JPEG; single/multiple/no-code semantics; payload never logged (5 tests with synthetic otpauth QR fixtures) |
 | `thorium` | done | catalog verified against live GitHub API 2026-09-02 (portable zips `Thorium_<VARIANT>_<VERSION>.zip`; `gz83/thorium` carries current builds, `Alex313031/Thorium` M144+ tags are stubs); rustls discovery; bounded streaming download (`.part` + rename); staging extract with zip-slip guard; atomic promote; `current` marker; delete protection (11 tests + 1 ignored live test, verified passing through the dev proxy) |
 
-Stubs not yet implemented: `crates/controller`, `test-support`; `src-tauri`
-is still the scaffold shell; the frontend is the scaffold React shell.
+`crates/controller` is implemented and tested (commit cd8a1fd): Workspace
+bootstrap (portable root + layout + single-instance mutex/registry + stale
+temp recovery), vault lifecycle, profile service (eager `profiles/<uuid>/User
+Data` creation, launch planning, supervised launch/stop), account service
+(deletes purge all secrets), passwords (set/get/copy with ClipboardScheduler
+— superseded timers provably cannot erase newer secrets), factors (otpauth +
+QR import, RFC-correct TOTP, counter-advancing HOTP), recovery codes, idle
+auto-lock (explicit-instant, no sleeps), redaction-pinned diagnostics.
+
+`src-tauri` is wired: 33 typed commands over the controller, `CmdError`
+{code,message} boundary (no raw Debug), 1s housekeeping thread (clipboard
+tick + idle lock), window-focus activity recording. Frontend vertical slice:
+7-section navigation, Vault create/unlock/lock, Profiles create/list/launch/
+stop/delete, Diagnostics; system dark/light theme.
+
+Verified live on Windows: `pnpm tauri dev` launches; portable workspace
+initializes beside the debug exe (workspace.db, vault/, profiles/, browsers/,
+runtime/, backups/, logs/); first-run "Create your Vault" UI renders.
+
+Stubs not yet implemented: `test-support`; Accounts/Browser/Settings/
+Dashboard pages are placeholders in the UI.
 
 ## Upstream facts (verified 2026-09-02 through proxy)
 
@@ -41,19 +60,15 @@ is still the scaffold shell; the frontend is the scaffold React shell.
 
 ## Remaining work for v1.0.0 (ordered)
 
-1. `controller`: workspace bootstrap orchestration (paths → layout →
-   `workspace.db` → vault open), services for profiles/accounts/factors,
-   clipboard clear scheduling, idle-lock tracking, diagnostics snapshot.
-2. `src-tauri`: typed Tauri commands over controller; no console windows.
-3. Frontend: Dashboard/Profiles/Accounts/Vault/Browser/Settings/
-   Diagnostics sections per CLAUDE.md UI requirements.
-4. CDP timezone/locale emulation (loopback-only, ephemeral port,
+1. Manual GUI checkpoint: profile persistence across restart (in progress).
+2. Accounts page + password/OTP/recovery UI (backend commands ready).
+3. CDP timezone/locale emulation (loopback-only, ephemeral port,
    DevToolsActivePort handshake) — the supported mechanism per contract;
    no deprecated CLI timezone flags.
-5. Backup/recovery of metadata+vault (staging cleanup on startup).
-6. Two-profile E2E with real Thorium on this machine (download 350 MB
+4. Backup/recovery of metadata+vault.
+5. Two-profile E2E with real Thorium on this machine (download 350 MB
    asset, run Test Profile A/B).
-7. Release workflow (`v*` tag → portable EXE + sha256 artifact).
+6. Release workflow (`v*` tag → portable EXE + sha256 artifact).
 
 ## Manual test checkpoint (when controller exists)
 

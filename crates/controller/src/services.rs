@@ -114,6 +114,16 @@ impl Workspace {
     // ------------------------------------------------------------------
     // Activity + idle auto-lock
 
+    /// One application housekeeping step: fire the pending clipboard
+    /// conditional clear (if due) and lock the vault when idle. Returns
+    /// whether the vault was locked by this tick. Owned by the shell's
+    /// periodic scheduler.
+    pub fn housekeeping_tick(&self, now: Instant) -> Result<bool, ControllerError> {
+        let cleared = self.clipboard_state().tick(&*self.clipboard(), now)?;
+        let locked = self.maybe_auto_lock(now)?;
+        Ok(cleared || locked)
+    }
+
     /// Records user activity (resets the idle clock).
     pub fn record_activity(&self, now: Instant) {
         self.idle().record_activity(now);

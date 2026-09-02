@@ -4613,6 +4613,7 @@ dependencies = [
 name = "thorium-workspace"
 version = "1.0.0"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "tauri",
@@ -4620,6 +4621,10 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "thorium-workspace-controller",
+ "thorium-workspace-domain",
+ "thorium-workspace-secrets",
+ "thorium-workspace-vault",
+ "thorium-workspace-windows-platform",
 ]
 
 [[package]]

@@ -22,6 +22,11 @@ tauri.workspace = true
 tauri-plugin-dialog.workspace = true
 tauri-plugin-opener.workspace = true
 thorium-workspace-controller.workspace = true
+thorium-workspace-domain.workspace = true
+thorium-workspace-secrets.workspace = true
+thorium-workspace-vault.workspace = true
+thorium-workspace-windows-platform.workspace = true
+chrono.workspace = true
 
 [features]
 default = []

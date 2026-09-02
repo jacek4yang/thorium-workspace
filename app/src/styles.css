@@ -1,0 +1,117 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  border-right: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+  padding: 16px 12px;
+}
+
+.sidebar h1 {
+  font-size: 15px;
+  margin: 4px 6px 18px;
+}
+
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sidebar button:hover { background: color-mix(in srgb, CanvasText 7%, transparent); }
+.sidebar button.active { background: color-mix(in srgb, CanvasText 12%, transparent); font-weight: 600; }
+
+.content { padding: 20px 28px; max-width: 860px; }
+
+.card {
+  border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 10px 0;
+}
+
+.profile-list { list-style: none; padding: 0; display: grid; gap: 10px; }
+.profile-title { display: flex; align-items: center; gap: 8px; }
+
+.badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+dl { display: grid; grid-template-columns: 130px 1fr; row-gap: 4px; margin: 10px 0; }
+dt { color: color-mix(in srgb, CanvasText 55%, transparent); }
+dd { margin: 0; }
+
+.mono { font-family: Consolas, monospace; font-size: 12px; }
+.muted { color: color-mix(in srgb, CanvasText 55%, transparent); }
+
+.error {
+  color: #b3261e;
+  background: color-mix(in srgb, #b3261e 8%, transparent);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error { color: #f2b8b5; background: color-mix(in srgb, #f2b8b5 10%, transparent); }
+}
+
+form { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+label { display: flex; flex-direction: column; gap: 4px; }
+
+input {
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 6px;
+  background: Field;
+  color: FieldText;
+  font: inherit;
+}
+
+button {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: ButtonFace;
+  color: ButtonText;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: color-mix(in srgb, CanvasText 8%, ButtonFace); }
+button:disabled { opacity: 0.55; cursor: default; }
+button.danger { color: #b3261e; }
+.row { display: flex; gap: 8px; }

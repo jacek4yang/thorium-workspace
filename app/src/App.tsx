@@ -1,6 +1,10 @@
 import { useState } from "react";
+import AccountsPage from "./pages/AccountsPage";
+import BrowserPage from "./pages/BrowserPage";
+import DashboardPage from "./pages/DashboardPage";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
 import ProfilesPage from "./pages/ProfilesPage";
+import SettingsPage from "./pages/SettingsPage";
 import VaultPage from "./pages/VaultPage";
 
 type Section =
@@ -45,17 +49,13 @@ export default function App() {
         </ul>
       </nav>
       <main className="content">
-        {section === "vault" && <VaultPage />}
+        {section === "dashboard" && <DashboardPage />}
         {section === "profiles" && <ProfilesPage />}
+        {section === "accounts" && <AccountsPage />}
+        {section === "browser" && <BrowserPage />}
+        {section === "vault" && <VaultPage />}
+        {section === "settings" && <SettingsPage />}
         {section === "diagnostics" && <DiagnosticsPage />}
-        {section !== "vault" &&
-          section !== "profiles" &&
-          section !== "diagnostics" && (
-            <p className="muted">
-              The {SECTIONS.find((entry) => entry.id === section)?.label} section
-              is part of the ongoing v1.0.0 build-out.
-            </p>
-          )}
       </main>
     </div>
   );

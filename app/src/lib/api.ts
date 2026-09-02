@@ -3,10 +3,17 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import {
+  Account,
+  AccountInput,
   BrowserProfile,
   DiagnosticsSnapshot,
+  OtpCode,
   ProfileInput,
+  RecoveryCode,
+  ReleaseOption,
+  SecondFactor,
   ThoriumSelection,
+  ThoriumVersionInfo,
   VaultStatus,
   WorkspaceSettings,
   toWorkspaceError,
@@ -52,6 +59,54 @@ export const api = {
 
   // diagnostics
   diagnostics: () => call<DiagnosticsSnapshot>("diagnostics"),
+
+  // accounts
+  accountsList: (profileId: string) =>
+    call<Account[]>("accounts_list", { profileId }),
+  accountCreate: (profileId: string, input: AccountInput) =>
+    call<Account>("account_create", { profileId, input }),
+  accountUpdate: (account: Account) => call<void>("account_update", { account }),
+  accountDelete: (accountId: string) =>
+    call<void>("account_delete", { accountId }),
+
+  // passwords
+  passwordSet: (accountId: string, password: string) =>
+    call<void>("password_set", { accountId, password }),
+  passwordDelete: (accountId: string) =>
+    call<void>("password_delete", { accountId }),
+  passwordCopy: (accountId: string) =>
+    call<number>("password_copy", { accountId }),
+  passwordReveal: (accountId: string) =>
+    call<string>("password_reveal", { accountId }),
+
+  // factors / otp / qr
+  factorImportOtpauth: (accountId: string, uri: string) =>
+    call<SecondFactor>("factor_import_otpauth", { accountId, uri }),
+  factorImportQrFile: (accountId: string, imagePath: string) =>
+    call<SecondFactor>("factor_import_qr_file", { accountId, imagePath }),
+  factorAddExternal: (accountId: string, label: string | null, note: string | null) =>
+    call<SecondFactor>("factor_add_external", { accountId, label, note }),
+  factorGenerate: (factorId: string) =>
+    call<OtpCode>("factor_generate", { factorId }),
+  factorDelete: (factorId: string) => call<void>("factor_delete", { factorId }),
+
+  // recovery codes
+  recoveryAdd: (accountId: string, values: string[]) =>
+    call<RecoveryCode[]>("recovery_add", { accountId, values }),
+  recoveryList: (accountId: string) =>
+    call<RecoveryCode[]>("recovery_list", { accountId }),
+  recoveryMarkUsed: (codeId: string) =>
+    call<void>("recovery_mark_used", { codeId }),
+  recoveryDelete: (codeId: string) => call<void>("recovery_delete", { codeId }),
+
+  // thorium
+  thoriumInstalled: () => call<ThoriumVersionInfo[]>("thorium_installed"),
+  thoriumDiscover: () => call<ReleaseOption[]>("thorium_discover"),
+  thoriumInstall: (release: { url: string; version: string; variant: string; sizeBytes: number }) =>
+    call<void>("thorium_install", release),
+  thoriumSetCurrent: (version: string) =>
+    call<void>("thorium_set_current", { version }),
+  thoriumDelete: (version: string) => call<void>("thorium_delete", { version }),
 };
 
 export type { BrowserProfile, DiagnosticsSnapshot, ThoriumSelection, VaultStatus, WorkspaceSettings };

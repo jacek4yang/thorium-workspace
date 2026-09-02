@@ -79,3 +79,90 @@ export function toWorkspaceError(thrown: unknown): WorkspaceError {
   }
   return new WorkspaceError("FRONTEND_UNKNOWN", String(thrown));
 }
+
+export type ServiceKind =
+  | { kind: "github" }
+  | { kind: "microsoft" }
+  | { kind: "google" }
+  | { kind: "gitlab" }
+  | { kind: "custom"; label: string };
+
+export interface Account {
+  id: string;
+  profileId: string;
+  displayName: string;
+  serviceKind: ServiceKind;
+  username: string | null;
+  email: string | null;
+  loginUrl: string | null;
+  tags: string[];
+  notes: string;
+  passwordRef: string | null;
+  factors: SecondFactor[];
+  recoveryCodes: RecoveryCode[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountInput {
+  displayName: string;
+  serviceKind: ServiceKind;
+  username: string | null;
+  email: string | null;
+  loginUrl: string | null;
+  tags: string[];
+  notes: string;
+}
+
+export type FactorKind = "totp" | "hotp" | "external";
+
+export interface SecondFactor {
+  id: string;
+  accountId: string;
+  kind: FactorKind;
+  label: string | null;
+  issuer: string | null;
+  accountLabel: string | null;
+  algorithm: "SHA1" | "SHA256" | "SHA512" | null;
+  digits: number | null;
+  periodSeconds: number | null;
+  counter: number | null;
+  secretRef: string | null;
+  externalNote: string | null;
+  createdAt: string;
+}
+
+export interface RecoveryCode {
+  id: string;
+  accountId: string;
+  position: number;
+  used: boolean;
+  markedUsedAt: string | null;
+  secretRef: string;
+}
+
+export interface OtpCode {
+  code: string;
+  secondsRemaining: number;
+}
+
+export interface ReleaseOption {
+  repo: string;
+  tag: string;
+  version: string;
+  variant: string;
+  url: string;
+  sizeBytes: number;
+}
+
+export interface ThoriumVersionInfo {
+  version: string;
+  variant: string | null;
+  installedAt: string | null;
+  isCurrent: boolean;
+}
+
+export interface DownloadProgress {
+  downloaded: number;
+  total: number;
+}

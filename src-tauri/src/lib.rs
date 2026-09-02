@@ -8,11 +8,13 @@
 
 use std::time::{Duration, Instant};
 
-use tauri::Manager as _;
+use tauri::{Emitter, Manager as _};
 
 use thorium_workspace_controller::error::ControllerError;
 use thorium_workspace_controller::services::VaultStatus;
-use thorium_workspace_controller::{DiagnosticsSnapshot, Workspace};
+use thorium_workspace_controller::{
+    DiagnosticsSnapshot, ReleaseOption, ThoriumVersionInfo, Workspace,
+};
 use thorium_workspace_domain::DiagnosticCode as _;
 use thorium_workspace_domain::{
     Account, AccountInput, BrowserProfile, ProfileInput, RecoveryCode, SecondFactor,
@@ -303,6 +305,65 @@ fn recovery_delete(ws: Ws<'_>, code_id: String) -> CmdResult<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Thorium management
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadProgress {
+    downloaded: u64,
+    total: u64,
+}
+
+#[tauri::command]
+async fn thorium_discover(ws: Ws<'_>) -> CmdResult<Vec<ReleaseOption>> {
+    controller(ws.discover_thorium_releases().await)
+}
+
+#[tauri::command]
+fn thorium_installed(ws: Ws<'_>) -> CmdResult<Vec<ThoriumVersionInfo>> {
+    controller(ws.installed_thorium_versions())
+}
+
+#[tauri::command]
+fn thorium_set_current(ws: Ws<'_>, version: String) -> CmdResult<()> {
+    ws.record_activity(Instant::now());
+    controller(ws.set_current_thorium(&version))
+}
+
+#[tauri::command]
+fn thorium_delete(ws: Ws<'_>, version: String) -> CmdResult<()> {
+    controller(ws.delete_thorium_version(&version))
+}
+
+#[tauri::command]
+async fn thorium_install(
+    app: tauri::AppHandle,
+    ws: Ws<'_>,
+    url: String,
+    version: String,
+    variant: String,
+    size_bytes: u64,
+) -> CmdResult<()> {
+    ws.record_activity(Instant::now());
+    let emitter = app.clone();
+    let progress = move |downloaded: u64, total: u64| {
+        // The upstream content-length is authoritative when present;
+        // fall back to the asset size for the denominator.
+        let _ = emitter.emit(
+            "thorium://progress",
+            DownloadProgress {
+                downloaded,
+                total: if total == 0 { size_bytes } else { total },
+            },
+        );
+    };
+    controller(
+        ws.install_thorium(&url, &version, &variant, &progress)
+            .await,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Diagnostics
 
 #[tauri::command]
@@ -375,14 +436,32 @@ pub fn run() {
             recovery_list,
             recovery_mark_used,
             recovery_delete,
+            thorium_discover,
+            thorium_installed,
+            thorium_set_current,
+            thorium_delete,
+            thorium_install,
             diagnostics,
         ])
         .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::Focused(true)) {
-                window
-                    .app_handle()
-                    .state::<Workspace>()
-                    .record_activity(Instant::now());
+            let workspace = window.app_handle().state::<Workspace>();
+            match event {
+                tauri::WindowEvent::Focused(true) => {
+                    workspace.record_activity(Instant::now());
+                }
+                // Tauri exposes no dedicated minimize event on Windows; a
+                // resize to a zero-sized client area is the minimize
+                // transition. Only acts when the user enabled the setting.
+                tauri::WindowEvent::Resized(size)
+                    if (size.width == 0 || size.height == 0)
+                        && workspace
+                            .settings()
+                            .map(|settings| settings.vault_lock_on_minimize)
+                            .unwrap_or(false) =>
+                {
+                    let _ = workspace.lock_vault();
+                }
+                _ => {}
             }
         })
         .setup(|app| {

@@ -115,3 +115,8 @@ button:hover:not(:disabled) { background: color-mix(in srgb, CanvasText 8%, Butt
 button:disabled { opacity: 0.55; cursor: default; }
 button.danger { color: #b3261e; }
 .row { display: flex; gap: 8px; }
+
+ul.plain { list-style: none; padding: 0; display: grid; gap: 6px; }
+label.checkbox { flex-direction: row; align-items: center; gap: 8px; }
+progress { width: 100%; height: 10px; }
+h3, h4 { margin: 14px 0 6px; }

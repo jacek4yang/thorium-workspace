@@ -11,6 +11,7 @@ pub mod diagnostics;
 pub mod error;
 pub mod idle;
 pub mod services;
+pub mod thorium_mgmt;
 pub mod workspace;
 
 pub use clipboard::{ClipboardPort, ClipboardScheduler, SystemClipboard};
@@ -18,6 +19,7 @@ pub use diagnostics::DiagnosticsSnapshot;
 pub use error::ControllerError;
 pub use idle::IdleTracker;
 pub use services::{LaunchPlan, VaultStatus};
+pub use thorium_mgmt::{ReleaseOption, ThoriumVersionInfo};
 pub use workspace::{BROWSERS_REL, DB_FILE, VAULT_REL, Workspace};
 
 #[cfg(test)]

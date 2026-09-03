@@ -9,114 +9,132 @@ accurately from this state.
 - Windows 11 (10.0.26200), rustc/cargo 1.98.0 stable MSVC, Node 26, pnpm 11.9.
 - Quality gates at last commit: `cargo fmt --check`, `cargo clippy
   --workspace --all-targets -- -D warnings`, `cargo test --workspace`
-  (197 tests, 0 failures), frontend lint/typecheck/test (12 tests)/build.
-- Dev proxy used for all upstream access: `http://127.0.0.1:10808`
-  (HTTP and SOCKS5H both verified). Never leak into committed code.
+  (197 tests, 0 failures), frontend lint (0 errors)/typecheck/test
+  (26 tests)/build.
 
-## UI architecture (this pass)
+## UI architecture (current)
 
-The frontend was rebuilt as a coherent desktop application (Fluent-inspired,
-high-density, light/dark/system):
+Fluent-inspired, dense, Windows-desktop utility. Light/dark/system themes;
+English / Simplified Chinese runtime languages.
 
-- `app/src/styles.css` — semantic design tokens only (surface/text/border/
-  accent/status scales, radii, spacing); dark theme via `data-theme` attr +
-  `prefers-color-scheme` fallback; custom thin scrollbars; no literal colors
-  in page components.
-- `app/src/components/Icon.tsx` — inline SVG icon set (no icon dependency).
-- `app/src/components/ui.tsx` — Button (default/primary/ghost/danger),
-  Card, Badge, Field, Notice/ErrorNotice, EmptyState, Dialog/ConfirmDialog,
-  Progress, Stat, CodeRing, PageHeader, Disclosure, Loading.
-- `app/src/components/Sidebar.tsx` — brand, grouped nav with icons,
-  `aria-current`, visible Alt+1..7 hints; vault state chip at the bottom
-  (one click = lock, or jump to unlock).
-- `app/src/App.tsx` — the shell: owns navigation, polls vault lock state
-  (3 s + window focus), owns settings/theme, toast queue, first-run routing
-  to the Vault page. Pages receive only what they need.
-- Pages redesigned: Dashboard (stat cards + real health checks + quick
-  launch), Profiles (first-class cards, create/edit dialog incl. startup
-  URLs and pinned-version picker fed by installed versions, delete
-  confirmation), Accounts (structured cards, edit dialog using the
-  previously-unused `account_update`, tags/login URL, collapsible secret
-  sections, live TOTP with countdown ring — HOTP deliberately never
-  auto-refreshes — external authenticator references, immediate removal of
-  all revealed secret state on vault lock), Browser (current-version card,
-  versions table, staged install display driven by real progress events),
-  Vault (three distinct lifecycle states, change-master-password dialog),
-  Settings (grouped cards: Appearance/Vault security/Clipboard/Browser/
-  Downloads, responsive `grid-form` layout filling the window), Diagnostics
-  (grouped cards, copy-as-report).
-- Responsive: no page-level max-width; card grids reflow on resize; custom
-  scrollbars; verified at ~1920 px and while narrowed.
+Layout system:
 
-## Download proxy (owner-requested, this pass)
+- `.app` grid: 216px sidebar + main column. Sidebar: brand, grouped nav
+  (Workspace / Support) with icons, accent-bar selected indicator,
+  `aria-current`, tertiary Alt+1..7 badges, vault state chip at the bottom.
+- Bounded content canvas: every page header (`.page-header-inner`) and every
+  direct child of `.page-body` is capped at `--content-max` (1200px) and
+  centered. Percentage-padding approaches were tried and rejected (they
+  misresolve in some WebView/monitor-DPI configurations — see git history).
+- Design tokens only (surface/text/border/accent/status scales, radii 5/8/10,
+  spacing scale); custom thin scrollbars; no literal colors in pages.
+- Components (`app/src/components/`): `Icon.tsx` (inline SVG set + brand
+  mark), `ui.tsx` (Button variants, Card, Badge, Field, Notice/ErrorNotice
+  with localized error codes, EmptyState, Dialog/ConfirmDialog, Progress,
+  Stat, CodeRing, PageHeader, Disclosure, Loading, SettingSection/SettingRow),
+  `Sidebar.tsx`.
+- Settings reads vertically and semantically: uppercase group labels
+  (General / Security / Browser & Downloads) above raised sections whose
+  rows are title+description left, control right (`SettingRow` collapses to
+  stacked under 860px). Explicit Save with dirty tracking; save toast;
+  theme and language apply live through the shell.
+- Dashboard: stat cards, real health checks, quick launch list, contextual
+  action cards; Profiles/Accounts/Browser/Vault/Diagnostics all share the
+  same layout system (details in git history; security semantics unchanged:
+  secret reveal/copy disabled while vault locked, revealed material dropped
+  immediately on lock).
 
-`WorkspaceSettings.downloadProxy` (`scheme://host:port`, optional
-credentials) routes **workspace downloads only** (Thorium discovery +
-install + the ip.sb probe). Never browser traffic. Details in
-`docs/ARCHITECTURE.md` ("Download proxy"). Settings page has a "Test
-connection" action (`proxy_test` command) that fetches the public exit IP
-from ip.sb through the candidate routing without saving.
+## Internationalization
 
-- The ip.sb probe was verified live through the real dev proxy
-  (`THORIUM_TEST_PROXY=http://127.0.0.1:10808`, both ignored live tests
-  passing); discovery through the proxy verified in the same run.
-- Proxy URLs are never embedded in errors (`THORIUM_PROXY_CONFIG`,
-  `THORIUM_PROBE_FAILED`); `Client::new_with_proxy` disables ambient env
-  proxies so the configured endpoint is used exactly.
-- reqwest gained the `socks` feature (socks5/socks5h support).
+- `i18next` + `react-i18next` (the only new runtime dependencies).
+- `app/src/i18n/`: `index.ts` (init, system detection, `applyLanguage`),
+  `locales/en-US.ts` (canonical key tree, strictly typed via
+  `typed.d.ts`), `locales/zh-CN.ts`, `i18n.test.ts`.
+- Every user-facing string in shell + all seven pages + shared components
+  is localized. Diagnostic codes, versions, paths, locale/timezone IDs,
+  protocol names stay untranslated. `common.errors.*` maps known backend
+  diagnostic codes to localized explanations; unknown codes fall back to
+  the backend message (never raw keys in the UI).
+- Language preference: `WorkspaceSettings.language` (`system`/`en-US`/
+  `zh-CN`), added to the Rust domain model with `#[serde(default)]` (no
+  migration; settings are a JSON row). `system` resolves from the WebView
+  locale: zh/zh-CN/zh-SG/zh-Hans → zh-CN; zh-TW/zh-HK deliberately NOT
+  (falls back to en-US); first recognized language wins.
+- Switching happens in Settings → General → Language and applies
+  immediately after the explicit Save (no restart); `document.lang` is
+  updated; the shell re-renders through i18next.
+- Completeness is enforced by tests: recursive key-tree parity between
+  en-US and zh-CN (both directions) plus placeholder-consistency checks.
+
+## Download proxy (owner-requested, previous pass)
+
+`WorkspaceSettings.downloadProxy` (`scheme://host:port`) routes workspace
+downloads only (Thorium discovery + install + the ip.sb probe); never
+browser traffic. Settings → Browser & Downloads → Downloads has a "Test
+connection" action probing ip.sb without saving. Verified live through the
+real dev proxy (`THORIUM_TEST_PROXY=http://127.0.0.1:10808`, ignored live
+tests passing). Proxy URLs never appear in errors or logs. reqwest gained
+the `socks` feature.
 
 ## Committed, tested subsystems
 
 | Crate | State | Notes |
 |---|---|---|
-| `domain` | done | accounts, profiles, factors, recovery codes, settings (incl. `download_proxy` + `validate_proxy_url`), validation, diagnostic codes |
+| `domain` | done | accounts, profiles, factors, recovery codes, settings (`download_proxy`, `language`), `validate_proxy_url`, diagnostic codes |
 | `secrets` | done | `SecretText`/`SecretBytes`: redacting Debug, no Serialize, zeroized, constant-time compare |
-| `otp` | done | RFC 4226/6238 HOTP/TOTP SHA-1/256/512, 6/8 digits; `otpauth://` parser that never leaks rejected URIs |
-| `storage` | done | SQLite (rusqlite bundled), schema v1, WAL, FK on; settings stored as a JSON row — new settings fields need only `#[serde(default)]`, no migration; profiles/accounts/factors/recovery-codes/settings/installs/runtime-meta repos; atomic account writes |
-| `vault` | done | Argon2id (64 MiB, t=3, p=1) + ChaCha20-Poly1305; header as AAD; atomic save + `.bak`; create/unlock/lock/rotate |
-| `windows-platform` | done | portable bootstrap, single-instance mutex, Job Objects, `CREATE_NO_WINDOW` spawn, conditional clipboard clear |
-| `browser-profile` | done | `LaunchSpec` (explicit `--user-data-dir`, allowlist), `ProfileLock`, supervised sessions with shutdown+reap |
-| `qr` | done | rqrr decode from PNG/JPEG; payloads never logged |
-| `thorium` | done | live catalog verified 2026-09-02; rustls; bounded download; zip-slip-guarded staged extract; atomic promote; `current` marker; delete protection; **download proxy support** (`proxy.rs`: `new_with_proxy`, `fetch_exit_ip` via ip.sb) |
-| `controller` | done | workspace bootstrap, vault lifecycle, profile/account services, clipboard scheduler, idle lock, diagnostics; `release_client` routes downloads through `download_proxy`; `test_download_proxy` |
+| `otp` | done | RFC 4226/6238 HOTP/TOTP SHA-1/256/512; `otpauth://` parser that never leaks rejected URIs |
+| `storage` | done | SQLite (bundled), schema v1, WAL; settings as JSON row (new fields need only `#[serde(default)]`) |
+| `vault` | done | Argon2id + ChaCha20-Poly1305; atomic save + `.bak`; create/unlock/lock/rotate |
+| `windows-platform` | done | portable bootstrap, single-instance mutex, Job Objects, `CREATE_NO_WINDOW`, conditional clipboard clear |
+| `browser-profile` | done | `LaunchSpec` allowlist, `ProfileLock`, supervised sessions |
+| `qr` | done | rqrr decode; payloads never logged |
+| `thorium` | done | rustls; bounded download; zip-slip-guarded staged install; atomic promote; delete protection; download-proxy support + ip.sb probe |
+| `controller` | done | workspace bootstrap, vault lifecycle, services, clipboard scheduler, idle lock, diagnostics; proxy-aware release client |
 
-All seven UI sections are functional and share the design system. Tauri
-command surface: 34 typed commands (`proxy_test` added), `CmdError`
-{code,message} boundary, 1 s housekeeping thread, window-focus activity
-recording.
+Tauri command surface: 34 typed commands (`proxy_test` included),
+`CmdError {code, message}` boundary, 1 s housekeeping thread.
 
-## Manual verification actually performed (2026-09-03, `pnpm tauri dev`)
+## Manual Windows GUI verification actually performed (2026-09-03)
 
-- App launches against the existing portable workspace beside the debug
-  exe; process stable, no runtime errors in the dev log.
-- Shell renders: brand, icon sidebar with Alt+ hints, vault chip; Alt+6
-  navigates to Settings (verified on screen); Settings groups render in
-  the responsive two-column grid with the Downloads proxy card and Test
-  button visible (screenshot-verified); custom scrollbar renders at the
-  window edge (screenshot-verified).
-- Live backend proxy path verified at crate level through the real proxy
-  (exit IP from ip.sb; discovery of real upstream releases).
+- App launched (`pnpm tauri dev`) against the dev workspace beside the
+  debug exe; stable process, no runtime errors.
+- Chinese UI verified on screen (persisted `language: "zh-CN"` written to
+  the dev workspace DB): sidebar (概览/配置档案/账户/浏览器/密码库/设置/诊断,
+  support group, accent selected state), dashboard (stat cards, health
+  checks with ✓/⚠ icons, contextual cards) all render in Chinese.
+- Settings page verified on screen in Chinese: 设置 header + subtitle,
+  常规 group with 外观 (主题/语言 rows), 安全 group (密码库/剪贴板), semantic
+  rows with title+description left / control right.
+- Dark mode verified on screen in Chinese: neutral dark palette, dark
+  sidebar/raised cards, accent selected item, bounded centered canvas.
+- Layout-bug found and fixed during verification: the earlier
+  percentage-padding content-bounding approach collapsed content into a
+  narrow column in some window/monitor configurations; replaced with the
+  bounded-children canvas (see git history, `fix(ui)`).
+- Capture caveat: screenshots on this multi-monitor mixed-DPI machine have
+  a PrintWindow offset artifact (scrollbar position proves the shift);
+  window-position artifacts when the window straddles two DPI-different
+  monitors are WebView2/OS-level and not reproducible in normal single-
+  monitor use.
 - NOT yet performed by hand: clicking "Test connection" in the running GUI
-  (UI automation lost window focus repeatedly); full two-profile launch
-  with real Thorium.
+  (crate-level live test passes); a full two-profile launch with real
+  Thorium; English-mode screenshots (English is covered by 26 frontend
+  tests incl. nav/save/theme flows).
 
 ## Upstream facts (verified 2026-09-02 through proxy)
 
 - Latest tag `M152.0.7977.55`; Windows portable assets:
   `Thorium_AVX2_152.0.7977.55.zip` (~350 MB), AVX/AVX512/SSE4/SSE3/WIN32_SSE2.
-- Portable zip extracts with `BIN/thorium.exe` (installer top-level dir).
-- No upstream SHA-256 digests published per asset; integrity relies on
-  TLS + zip CRC + structure validation (documented in SECURITY notes).
+- Portable zip extracts with `BIN/thorium.exe`; no per-asset SHA-256
+  digests upstream; integrity relies on TLS + zip CRC + structure checks.
 
 ## Remaining work for v1.0.0 (ordered)
 
-1. Manual GUI checkpoint: profile persistence across restart; "Test
-   connection" click-through in the running GUI.
-2. CDP timezone/locale emulation (loopback-only, ephemeral port,
-   DevToolsActivePort handshake) — the supported mechanism per contract.
+1. Manual GUI checkpoint: "Test connection" click-through; profile
+   persistence across restart; English-mode visual pass.
+2. CDP timezone/locale emulation (loopback-only, ephemeral port).
 3. Backup/recovery of metadata+vault.
 4. Two-profile E2E with real Thorium (~350 MB asset download).
-5. `DECISIONS.md` / `SECURITY.md` / `THREAT-MODEL.md` as standalone docs
-   (currently only `docs/ARCHITECTURE.md` exists).
-6. Release workflow already exists (`ci-release.yml`, tag-triggered);
-   first real `v1.0.0` tag build still to be observed.
+5. `DECISIONS.md` / `SECURITY.md` / `THREAT-MODEL.md` as standalone docs.
+6. Release workflow exists (`ci-release.yml`, tag-triggered); first real
+   `v1.0.0` tag build still to be observed.

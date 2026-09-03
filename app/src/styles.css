@@ -167,6 +167,32 @@ pre,
   border-radius: var(--radius-sm);
 }
 
+/* Custom scrollbars: thin, token-themed, hugging the window edge. The
+   default Chromium/Windows scrollbar is visually heavy and off-brand. */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-tertiary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 h1,
 h2,
 h3 {
@@ -265,6 +291,15 @@ a {
   display: grid;
   gap: var(--space-4);
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+/* Form-card grid: settings groups reflow into columns on wide windows so
+   the page fills the screen instead of stretching single wide forms. */
+.grid-form {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
+  align-items: start;
 }
 
 .grid-stats {

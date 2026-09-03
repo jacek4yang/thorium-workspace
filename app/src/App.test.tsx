@@ -35,6 +35,7 @@ function mockSteadyState() {
     vaultLockOnMinimize: true,
     theme: "system",
     preferredThoriumVariant: "AVX2",
+    downloadProxy: null,
   });
   vi.mocked(api.diagnostics).mockResolvedValue({
     workspacePath: "C:\\workspace",

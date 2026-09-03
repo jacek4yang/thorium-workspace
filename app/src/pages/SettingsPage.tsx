@@ -6,10 +6,12 @@
 import { useState } from "react";
 
 import {
+  Badge,
   Button,
   Card,
   ErrorNotice,
   Field,
+  Notice,
   PageHeader,
 } from "../components/ui";
 import { api } from "../lib/api";
@@ -69,9 +71,10 @@ export default function SettingsPage({
           </>
         }
       />
-      <div className="page-body stack" style={{ maxWidth: 760 }}>
+      <div className="page-body">
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
 
+        <div className="grid-form">
         <Card title="Appearance">
           <Field label="Theme" hint="Follows the Windows light/dark setting by default">
             {(id) => (
@@ -171,8 +174,108 @@ export default function SettingsPage({
             )}
           </Field>
         </Card>
+
+        <DownloadsCard
+          draft={draft}
+          onUpdate={(downloadProxy) => update({ downloadProxy })}
+        />
+        </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Download proxy configuration. The proxy routes workspace downloads only
+ * (Thorium discovery and install archives); browser profile traffic never
+ * touches it. The Test action probes ip.sb through the candidate routing
+ * without saving, so the user can verify the endpoint first.
+ */
+function DownloadsCard({
+  draft,
+  onUpdate,
+}: {
+  draft: WorkspaceSettings;
+  onUpdate: (downloadProxy: string | null) => void;
+}) {
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [failure, setFailure] = useState<WorkspaceError | null>(null);
+
+  const test = async () => {
+    const candidate = draft.downloadProxy?.trim() || null;
+    setTesting(true);
+    setResult(null);
+    setFailure(null);
+    try {
+      const probed = await api.proxyTest(candidate);
+      setResult(probed.exitIp);
+    } catch (thrown) {
+      setFailure(toError(thrown));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const proxied = Boolean(draft.downloadProxy?.trim());
+
+  return (
+    <Card
+      title="Downloads"
+      subtitle="Proxy used for workspace downloads only (Thorium discovery and install)"
+    >
+      <div className="stack">
+        <Field
+          label="Download proxy"
+          hint="Format: http://ip:port, https://…, socks5://ip:port, or socks5h://… Leave empty for a direct connection. Never used for browser profile traffic."
+        >
+          {(id) => (
+            <input
+              id={id}
+              type="text"
+              value={draft.downloadProxy ?? ""}
+              onChange={(event) => onUpdate(event.target.value.trim() === "" ? null : event.target.value)}
+              placeholder="http://127.0.0.1:10808"
+              spellCheck={false}
+            />
+          )}
+        </Field>
+        <div className="row">
+          <Button
+            icon="external"
+            disabled={testing}
+            onClick={() => void test()}
+          >
+            {testing ? (
+              <>
+                <span className="spinner" />
+                Testing…
+              </>
+            ) : (
+              "Test connection"
+            )}
+          </Button>
+          {result !== null && !testing && (
+            <Badge tone="success" icon="check">
+              Exit IP: {result}
+            </Badge>
+          )}
+          {proxied && result === null && !failure && !testing && (
+            <Badge>Downloads route through the proxy</Badge>
+          )}
+        </div>
+        {failure && (
+          <Notice tone="error" title="Proxy test failed">
+            {failure.message} <code>{failure.code}</code>
+          </Notice>
+        )}
+        <p className="faint">
+          The test fetches your public IP from ip.sb through the configured routing: with a
+          working proxy the reported exit IP is the proxy&apos;s, not yours. The setting applies
+          to Thorium release discovery and downloads only.
+        </p>
+      </div>
+    </Card>
   );
 }
 

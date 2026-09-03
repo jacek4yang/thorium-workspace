@@ -33,6 +33,41 @@ pub enum ThemePreference {
     Dark,
 }
 
+/// UI language preference. `System` defers to the WebView locale at
+/// startup (Simplified Chinese variants map to `zh-CN`, everything else to
+/// `en-US`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LanguagePreference {
+    /// Detect from the OS/WebView locale.
+    #[default]
+    System,
+    /// English (United States).
+    #[serde(rename = "en-US")]
+    EnUs,
+    /// Simplified Chinese.
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+}
+
+impl LanguagePreference {
+    /// All values, in settings-UI order.
+    pub const ALL: [LanguagePreference; 3] = [
+        LanguagePreference::System,
+        LanguagePreference::EnUs,
+        LanguagePreference::ZhCn,
+    ];
+
+    /// The BCP-47 identifier this preference resolves to when not `System`.
+    pub fn tag(self) -> Option<&'static str> {
+        match self {
+            LanguagePreference::System => None,
+            LanguagePreference::EnUs => Some("en-US"),
+            LanguagePreference::ZhCn => Some("zh-CN"),
+        }
+    }
+}
+
 /// Workspace-level settings (non-secret).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +92,9 @@ pub struct WorkspaceSettings {
     /// logged and never echoed into error messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_proxy: Option<String>,
+    /// UI language preference.
+    #[serde(default)]
+    pub language: LanguagePreference,
 }
 
 impl Default for WorkspaceSettings {
@@ -68,6 +106,7 @@ impl Default for WorkspaceSettings {
             theme: ThemePreference::System,
             preferred_thorium_variant: "AVX2".to_owned(),
             download_proxy: None,
+            language: LanguagePreference::System,
         }
     }
 }
@@ -212,5 +251,6 @@ mod tests {
         }"#;
         let settings: WorkspaceSettings = serde_json::from_str(legacy).expect("legacy json");
         assert_eq!(settings.download_proxy, None);
+        assert_eq!(settings.language, LanguagePreference::System);
     }
 }

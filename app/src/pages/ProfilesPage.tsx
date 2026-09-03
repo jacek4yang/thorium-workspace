@@ -2,7 +2,8 @@
 // User Data directory. This page treats them as first-class cards with the
 // running state, environment, and actions always visible.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   Badge,
@@ -17,6 +18,7 @@ import {
   PageHeader,
 } from "../components/ui";
 import { api } from "../lib/api";
+import { localizedErrorMessage } from "../lib/errors";
 import type { ToastFn } from "../lib/hooks";
 import type { BrowserProfile, ThoriumVersionInfo } from "../lib/types";
 import { WorkspaceError } from "../lib/types";
@@ -31,6 +33,7 @@ const EMPTY_FORM = {
 };
 
 export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
+  const { t } = useTranslation();
   const [profiles, setProfiles] = useState<BrowserProfile[] | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
   const [installed, setInstalled] = useState<ThoriumVersionInfo[]>([]);
@@ -41,7 +44,7 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
   const [deleteTarget, setDeleteTarget] = useState<BrowserProfile | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     try {
       const [listed, active] = await Promise.all([api.profilesList(), api.runningProfiles()]);
       setProfiles(listed);
@@ -50,7 +53,7 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
     } catch (thrown) {
       setError(toError(thrown));
     }
-  }, []);
+  };
 
   useEffect(() => {
     let active = true;
@@ -93,7 +96,7 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
       setError(null);
       return true;
     } catch (thrown) {
-      onToast(toError(thrown).message, "error");
+      onToast(localizedErrorMessage(toError(thrown), t), "error");
       return false;
     } finally {
       setBusy(false);
@@ -106,7 +109,7 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
       async () => {
         await api.profileLaunch(profile.id);
       },
-      `Launched “${profile.name}”`,
+      t("profiles.toasts.launched", { name: profile.name }),
     ).finally(() => setBusyId(null));
   };
 
@@ -114,22 +117,22 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
     setBusyId(profile.id);
     void run(
       () => api.profileStop(profile.id),
-      `Stopped “${profile.name}”`,
+      t("profiles.toasts.stopped", { name: profile.name }),
     ).finally(() => setBusyId(null));
   };
 
   return (
     <>
       <PageHeader
-        title="Profiles"
-        subtitle="Isolated Thorium browser environments, each with its own User Data directory"
+        title={t("profiles.title")}
+        subtitle={t("profiles.subtitle")}
         actions={
           <>
             <Button onClick={() => void refresh()} icon="refresh" disabled={busy}>
-              Refresh
+              {t("common.refresh")}
             </Button>
             <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
-              New profile
+              {t("profiles.newProfile")}
             </Button>
           </>
         }
@@ -138,15 +141,15 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
 
         {profiles === null ? (
-          <Loading label="Loading profiles…" />
+          <Loading label={t("profiles.loading")} />
         ) : profiles.length === 0 ? (
           <EmptyState
             icon="profiles"
-            title="No profiles yet"
-            description="A profile is an isolated Thorium browser environment with its own User Data directory, locale, timezone, and accounts. Nothing is shared between profiles."
+            title={t("profiles.empty.title")}
+            description={t("profiles.empty.description")}
             action={
               <Button variant="primary" icon="plus" onClick={() => setShowCreate(true)}>
-                Create your first profile
+                {t("profiles.empty.action")}
               </Button>
             }
           />
@@ -186,11 +189,11 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
                   async () => {
                     await api.profileUpdate({ ...profile, ...input });
                   },
-                  `Saved “${input.name}”`,
+                  t("profiles.toasts.saved", { name: input.name }),
                 )
               : await run(async () => {
                   await api.profileCreate(input);
-                }, `Created “${input.name}”`);
+                }, t("profiles.toasts.created", { name: input.name }));
             if (ok) {
               setShowCreate(false);
               setEditorTarget(null);
@@ -201,9 +204,9 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title={`Delete “${deleteTarget.name}”?`}
-          message={`This permanently deletes the profile, its accounts, passwords, 2FA factors, and recovery codes. The User Data directory on disk is kept. This cannot be undone.`}
-          confirmLabel="Delete profile"
+          title={t("profiles.deleteDialog.title", { name: deleteTarget.name })}
+          message={t("profiles.deleteDialog.message")}
+          confirmLabel={t("profiles.deleteDialog.confirm")}
           busy={busy}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
@@ -211,7 +214,7 @@ export default function ProfilesPage({ onToast }: { onToast: ToastFn }) {
             setDeleteTarget(null);
             void run(
               () => api.profileDelete(target.id),
-              `Deleted “${target.name}”`,
+              t("profiles.toasts.deleted", { name: target.name }),
             );
           }}
         />
@@ -241,18 +244,28 @@ function ProfileCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const currentVersion = installed.find((entry) => entry.isCurrent)?.version;
-  const thoriumLabel =
+  const thoriumLabel = t(
     profile.thoriumVersion.selection === "pinned"
-      ? `Thorium ${profile.thoriumVersion.version} · pinned`
+      ? "profiles.thoriumPinned"
       : currentVersion
-        ? `Thorium ${currentVersion} · follows Current`
-        : "Thorium · follows Current (not installed)";
+        ? "profiles.thoriumFollowsCurrent"
+        : "profiles.thoriumFollowsCurrentUninstalled",
+    profile.thoriumVersion.selection === "pinned"
+      ? { version: profile.thoriumVersion.version }
+      : currentVersion
+        ? { version: currentVersion }
+        : undefined,
+  );
   const environment = [profile.locale, profile.timezone].filter(Boolean).join(" · ");
 
   return (
     <Card>
-      <div className="row-wide" style={{ alignItems: "flex-start", flexWrap: "nowrap", gap: "var(--space-4)" }}>
+      <div
+        className="row-wide"
+        style={{ alignItems: "flex-start", flexWrap: "nowrap", gap: "var(--space-4)" }}
+      >
         <div className="grow stack-tight">
           <div className="row" style={{ flexWrap: "nowrap" }}>
             <span
@@ -268,18 +281,28 @@ function ProfileCard({
             <strong style={{ fontSize: 15 }}>{profile.name}</strong>
             {running ? (
               <Badge tone="success" icon="play">
-                Running
+                {t("profiles.running")}
               </Badge>
             ) : (
-              <Badge>Stopped</Badge>
+              <Badge>{t("profiles.stopped")}</Badge>
             )}
           </div>
           <div className="muted">{thoriumLabel}</div>
           <div className="faint">
             {environment ? `${environment} · ` : ""}
-            {profile.accountIds.length} {profile.accountIds.length === 1 ? "account" : "accounts"}
+            {t(
+              profile.accountIds.length === 1
+                ? "profiles.accountsCount"
+                : "profiles.accountsCount_other",
+              { count: profile.accountIds.length },
+            )}
             {profile.startupUrls.length > 0
-              ? ` · ${profile.startupUrls.length} startup URL${profile.startupUrls.length === 1 ? "" : "s"}`
+              ? ` · ${t(
+                  profile.startupUrls.length === 1
+                    ? "profiles.startupUrlsCount"
+                    : "profiles.startupUrlsCount_other",
+                  { count: profile.startupUrls.length },
+                )}`
               : ""}
           </div>
           <div className="faint mono truncate selectable" title={profile.userDataRelPath}>
@@ -288,11 +311,11 @@ function ProfileCard({
         </div>
         <div className="row" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
           <Button size="small" icon="edit" disabled={busy} onClick={onEdit}>
-            Edit
+            {t("common.edit")}
           </Button>
           {running ? (
             <Button size="small" icon="stop" disabled={busy} onClick={onStop}>
-              Stop
+              {t("profiles.stop")}
             </Button>
           ) : (
             <Button
@@ -302,11 +325,11 @@ function ProfileCard({
               disabled={busy || busySelf}
               onClick={onLaunch}
             >
-              Launch
+              {t("profiles.launch")}
             </Button>
           )}
           <Button size="small" variant="danger" icon="trash" disabled={busy} onClick={onDelete}>
-            Delete
+            {t("common.delete")}
           </Button>
         </div>
       </div>
@@ -337,6 +360,7 @@ function ProfileDialog({
     profile: BrowserProfile | null,
   ) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState(() =>
     profile
       ? {
@@ -378,72 +402,81 @@ function ProfileDialog({
 
   return (
     <Dialog
-      title={profile ? `Edit “${profile.name}”` : "New profile"}
+      title={
+        profile
+          ? t("profiles.dialog.editTitle", { name: profile.name })
+          : t("profiles.dialog.createTitle")
+      }
       description={
         profile
-          ? "Changes apply to the next launch of this profile."
-          : "Each profile gets its own User Data directory; nothing is shared between profiles."
+          ? t("profiles.dialog.editDescription")
+          : t("profiles.dialog.createDescription")
       }
       onClose={onClose}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </Button>
-          <Button variant="primary" disabled={busy || form.name.trim().length === 0} form="profile-form" type="submit">
-            {profile ? "Save changes" : "Create profile"}
+          <Button
+            variant="primary"
+            disabled={busy || form.name.trim().length === 0}
+            form="profile-form"
+            type="submit"
+          >
+            {profile ? t("profiles.dialog.save") : t("profiles.dialog.create")}
           </Button>
         </>
       }
     >
       <form id="profile-form" className="stack" onSubmit={submit}>
-        <Field label="Name">
+        <Field label={t("profiles.dialog.name")}>
           {(id) => (
             <input
               id={id}
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
-              placeholder="Personal"
+              placeholder={t("profiles.dialog.namePlaceholder")}
               required
               autoFocus
             />
           )}
         </Field>
         <div className="form-grid">
-          <Field label="Locale" hint="BCP-47, applied via Chromium language settings">
+          <Field label={t("profiles.dialog.locale")} hint={t("profiles.dialog.localeHint")}>
             {(id) => (
               <input
                 id={id}
                 value={form.locale}
                 onChange={(event) => setForm({ ...form, locale: event.target.value })}
-                placeholder="en-US"
+                placeholder={t("profiles.dialog.localePlaceholder")}
               />
             )}
           </Field>
-          <Field label="Timezone" hint="IANA name, e.g. America/Los_Angeles">
+          <Field label={t("profiles.dialog.timezone")} hint={t("profiles.dialog.timezoneHint")}>
             {(id) => (
               <input
                 id={id}
                 value={form.timezone}
                 onChange={(event) => setForm({ ...form, timezone: event.target.value })}
-                placeholder="America/Los_Angeles"
+                placeholder={t("profiles.dialog.timezonePlaceholder")}
               />
             )}
           </Field>
         </div>
-        <Field label="Startup URLs" hint="One URL per line, http(s) only">
+        <Field label={t("profiles.dialog.startupUrls")} hint={t("profiles.dialog.startupUrlsHint")}>
           {(id) => (
             <textarea
               id={id}
               rows={3}
               value={form.startupUrls}
               onChange={(event) => setForm({ ...form, startupUrls: event.target.value })}
-              placeholder={"https://github.com\nhttps://mail.protection.outlook.com"}
+              placeholder={t("profiles.dialog.startupUrlsPlaceholder")}
             />
           )}
         </Field>
         <div className="form-grid">
-          <Field label="Thorium version">
+          <Field label={t("profiles.dialog.thoriumVersion")}>
             {(id) => (
               <select
                 id={id}
@@ -455,20 +488,24 @@ function ProfileDialog({
                   })
                 }
               >
-                <option value="current">Follow Current</option>
-                {pinnable.length > 0 && <option value="pinned">Pin a version…</option>}
+                <option value="current">{t("profiles.dialog.followCurrent")}</option>
+                {pinnable.length > 0 && (
+                  <option value="pinned">{t("profiles.dialog.pinVersion")}</option>
+                )}
               </select>
             )}
           </Field>
           {form.pinSelection === "pinned" && (
-            <Field label="Pinned version">
+            <Field label={t("profiles.dialog.pinnedVersion")}>
               {(id) => (
                 <select
                   id={id}
                   value={form.pinnedVersion}
                   onChange={(event) => setForm({ ...form, pinnedVersion: event.target.value })}
                 >
-                  {pinnable.length === 0 && <option value="">No versions installed</option>}
+                  {pinnable.length === 0 && (
+                    <option value="">{t("profiles.dialog.noVersionsInstalled")}</option>
+                  )}
                   {pinnable.map((version) => (
                     <option key={version} value={version}>
                       {version}
@@ -480,10 +517,7 @@ function ProfileDialog({
           )}
         </div>
         {pinnable.length === 0 && (
-          <p className="faint">
-            No Thorium versions are installed yet; the profile will use the current version once
-            one is installed. Install Thorium from the Browser section.
-          </p>
+          <p className="faint">{t("profiles.dialog.noVersionsNote")}</p>
         )}
       </form>
     </Dialog>

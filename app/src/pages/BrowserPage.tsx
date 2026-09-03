@@ -3,7 +3,8 @@
 // download bar is driven by thorium://progress events, and "finalizing" covers
 // the extract/promote phase which the backend does not stream separately.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 
 import { Icon } from "../components/Icon";
@@ -33,13 +34,17 @@ type InstallStage = "idle" | "download" | "finalize";
  * the card is replaced by the updated Current version card, which is the real
  * evidence of readiness. Extract/Promote are not separately streamed by the
  * backend, so they share the honest "finalizing" state. */
-const STAGES: { key: InstallStage; label: string }[] = [
-  { key: "download", label: "Download" },
-  { key: "finalize", label: "Extract" },
-  { key: "finalize", label: "Promote" },
+const STAGES: {
+  key: InstallStage;
+  labelKey: "browser.stages.download" | "browser.stages.extract" | "browser.stages.promote";
+}[] = [
+  { key: "download", labelKey: "browser.stages.download" },
+  { key: "finalize", labelKey: "browser.stages.extract" },
+  { key: "finalize", labelKey: "browser.stages.promote" },
 ];
 
 export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
+  const { t } = useTranslation();
   const [installed, setInstalled] = useState<ThoriumVersionInfo[] | null>(null);
   const [releases, setReleases] = useState<ReleaseOption[] | null>(null);
   const [variantFilter, setVariantFilter] = useState("AVX2");
@@ -49,15 +54,6 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [error, setError] = useState<WorkspaceError | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ThoriumVersionInfo | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      setInstalled(await api.thoriumInstalled());
-      setError(null);
-    } catch (thrown) {
-      setError(toError(thrown));
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -81,6 +77,15 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
     };
   }, []);
 
+  const refresh = async () => {
+    try {
+      setInstalled(await api.thoriumInstalled());
+      setError(null);
+    } catch (thrown) {
+      setError(toError(thrown));
+    }
+  };
+
   const discover = async () => {
     setDiscoverBusy(true);
     try {
@@ -100,7 +105,9 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
     setProgress({ downloaded: 0, total: release.sizeBytes });
     try {
       await api.thoriumInstall(release);
-      onToast(`Thorium ${release.version} (${release.variant}) installed`);
+      onToast(
+        t("browser.toasts.installed", { version: release.version, variant: release.variant }),
+      );
       await refresh();
     } catch (thrown) {
       setError(toError(thrown));
@@ -114,7 +121,7 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
   const setCurrent = async (version: string) => {
     try {
       await api.thoriumSetCurrent(version);
-      onToast(`Thorium ${version} is now Current`);
+      onToast(t("browser.toasts.current", { version }));
       await refresh();
     } catch (thrown) {
       setError(toError(thrown));
@@ -129,11 +136,11 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
   return (
     <>
       <PageHeader
-        title="Browser"
-        subtitle="Portable Thorium installations, managed beside this workspace"
+        title={t("browser.title")}
+        subtitle={t("browser.subtitle")}
         actions={
           <Button onClick={() => void refresh()} icon="refresh" disabled={installing}>
-            Refresh
+            {t("common.refresh")}
           </Button>
         }
       />
@@ -141,18 +148,19 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
 
         {installing && (
-          <Card title={`Installing Thorium ${installingVersion ?? ""}`}>
+          <Card title={t("browser.installing", { version: installingVersion ?? "" })}>
             <div className="stack-tight">
               <div className="stages">
                 {STAGES.map((entry, index) => {
                   const activeIndex = STAGES.findIndex((s) => s.key === stage);
                   const state = index < activeIndex ? "done" : index === activeIndex ? "active" : "";
                   return (
-                    <span key={`${entry.label}-${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      {index > 0 && (
-                        <Icon name="chevron" size={12} className="stage-arrow" />
-                      )}
-                      <span className={`stage ${state}`}>{entry.label}</span>
+                    <span
+                      key={`${entry.labelKey}-${index}`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                    >
+                      {index > 0 && <Icon name="chevron" size={12} className="stage-arrow" />}
+                      <span className={`stage ${state}`}>{t(entry.labelKey)}</span>
                     </span>
                   );
                 })}
@@ -160,25 +168,30 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
               {stage === "download" && progress && (
                 <Progress
                   fraction={progress.total > 0 ? progress.downloaded / progress.total : null}
-                  label={`${(progress.downloaded / 1_000_000).toFixed(1)} MB${
-                    progress.total > 0 ? ` of ${(progress.total / 1_000_000).toFixed(1)} MB` : ""
-                  } downloaded`}
+                  label={
+                    progress.total > 0
+                      ? t("browser.downloadedOf", {
+                          downloaded: (progress.downloaded / 1_000_000).toFixed(1),
+                          total: (progress.total / 1_000_000).toFixed(1),
+                        })
+                      : `${(progress.downloaded / 1_000_000).toFixed(1)} MB`
+                  }
                 />
               )}
               {stage === "finalize" && (
-                <Progress fraction={null} label="Extracting and promoting the staged install…" />
+                <Progress fraction={null} label={t("browser.finalize")} />
               )}
             </div>
           </Card>
         )}
 
         {installed === null ? (
-          <Loading label="Loading installed versions…" />
+          <Loading />
         ) : (
           <>
             <Card
-              title="Current version"
-              subtitle="Profiles that follow Current use this version"
+              title={t("browser.current.title")}
+              subtitle={t("browser.current.subtitle")}
             >
               {current ? (
                 <div className="row-wide">
@@ -189,28 +202,35 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
                     </strong>
                     {current.variant && <Badge tone="accent">{current.variant}</Badge>}
                     {current.installedAt && (
-                      <span className="faint">installed {formatWhen(current.installedAt)}</span>
+                      <span className="faint">
+                        {t("browser.current.installedWhen", {
+                          when: formatWhen(current.installedAt),
+                        })}
+                      </span>
                     )}
                   </div>
                 </div>
               ) : (
                 <EmptyState
                   icon="download"
-                  title="No Thorium version installed"
-                  description="Discover upstream portable releases below and install the variant matching your CPU. The install is staged and atomically promoted, so a failed update never destroys the last working version."
+                  title={t("browser.current.emptyTitle")}
+                  description={t("browser.current.emptyDescription")}
                 />
               )}
             </Card>
 
             {others.length > 0 && (
-              <Card title="Other installed versions" subtitle="Previous versions are kept as a known-good fallback">
+              <Card
+                title={t("browser.others.title")}
+                subtitle={t("browser.others.subtitle")}
+              >
                 <table>
                   <thead>
                     <tr>
-                      <th>Version</th>
-                      <th>Variant</th>
-                      <th>Installed</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
+                      <th>{t("browser.others.columnVersion")}</th>
+                      <th>{t("browser.others.columnVariant")}</th>
+                      <th>{t("browser.others.columnInstalled")}</th>
+                      <th style={{ textAlign: "right" }}>{t("browser.others.columnActions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -218,11 +238,16 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
                       <tr key={version.version}>
                         <td className="mono">{version.version}</td>
                         <td>{version.variant ?? "—"}</td>
-                        <td className="faint">{version.installedAt ? formatWhen(version.installedAt) : "—"}</td>
+                        <td className="faint">
+                          {version.installedAt ? formatWhen(version.installedAt) : "—"}
+                        </td>
                         <td>
-                          <div className="row" style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}>
+                          <div
+                            className="row"
+                            style={{ justifyContent: "flex-end", flexWrap: "nowrap" }}
+                          >
                             <Button size="small" onClick={() => void setCurrent(version.version)}>
-                              Set current
+                              {t("browser.others.setCurrent")}
                             </Button>
                             <Button
                               size="small"
@@ -230,7 +255,7 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
                               icon="trash"
                               onClick={() => setDeleteTarget(version)}
                             >
-                              Delete
+                              {t("common.delete")}
                             </Button>
                           </div>
                         </td>
@@ -244,12 +269,12 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
         )}
 
         <Card
-          title="Install a new version"
-          subtitle="Discovery queries the live upstream release list"
+          title={t("browser.install.title")}
+          subtitle={t("browser.install.subtitle")}
         >
           <div className="stack">
             <div className="row">
-              <Field label="Variant" hint="Pick the newest instruction set your CPU supports">
+              <Field label={t("browser.install.variant")} hint={t("browser.install.variantHint")}>
                 {(id) => (
                   <select
                     id={id}
@@ -270,28 +295,25 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
                   disabled={installing || discoverBusy}
                   icon="refresh"
                 >
-                  {discoverBusy ? "Checking…" : "Check upstream releases"}
+                  {discoverBusy ? t("browser.install.checking") : t("browser.install.check")}
                 </Button>
               </div>
             </div>
 
             {filtered === null ? (
-              <p className="faint">
-                Press “Check upstream releases” to list portable Windows builds.
-              </p>
+              <p className="faint">{t("browser.install.notChecked")}</p>
             ) : filtered.length === 0 ? (
-              <Notice tone="warning" title="No releases found">
-                No portable Windows {variantFilter} builds were found upstream. Try another
-                variant.
+              <Notice tone="warning" title={t("browser.install.noneFound")}>
+                {t("browser.install.noneFoundDescription", { variant: variantFilter })}
               </Notice>
             ) : (
               <table>
                 <thead>
                   <tr>
-                    <th>Version</th>
-                    <th>Size</th>
-                    <th>Source</th>
-                    <th style={{ textAlign: "right" }}>Action</th>
+                    <th>{t("browser.install.columnVersion")}</th>
+                    <th>{t("browser.install.columnSize")}</th>
+                    <th>{t("browser.install.columnSource")}</th>
+                    <th style={{ textAlign: "right" }}>{t("browser.install.columnAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -309,7 +331,7 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
                             disabled={installing}
                             onClick={() => void install(release)}
                           >
-                            Install
+                            {t("browser.install.install")}
                           </Button>
                         </div>
                       </td>
@@ -324,9 +346,9 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title={`Delete Thorium ${deleteTarget.version}?`}
-          message="The current version and versions used by running profiles are protected and cannot be deleted. Deleting a fallback version cannot be undone without re-downloading it."
-          confirmLabel="Delete version"
+          title={t("browser.deleteDialog.title", { version: deleteTarget.version })}
+          message={t("browser.deleteDialog.message")}
+          confirmLabel={t("browser.deleteDialog.confirm")}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
             const target = deleteTarget;
@@ -334,7 +356,7 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
             void (async () => {
               try {
                 await api.thoriumDelete(target.version);
-                onToast(`Deleted Thorium ${target.version}`);
+                onToast(t("browser.toasts.deleted", { version: target.version }));
                 await refresh();
               } catch (thrown) {
                 setError(toError(thrown));

@@ -46,6 +46,8 @@ export interface WorkspaceSettings {
    * traffic. `null` means direct connection.
    */
   downloadProxy: string | null;
+  /** UI language: system detection, English, or Simplified Chinese. */
+  language: "system" | "en-US" | "zh-CN";
 }
 
 /** Result of probing the exit IP through the candidate proxy routing. */

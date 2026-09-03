@@ -28,6 +28,7 @@ pub use recovery::RecoveryCode;
 pub use secret_ref::SecretRef;
 pub use service::{KNOWN_SERVICES, ServiceKind};
 pub use settings::{
-    PROXY_SCHEMES, ThemePreference, ThoriumInstall, WorkspaceSettings, validate_proxy_url,
+    LanguagePreference, PROXY_SCHEMES, ThemePreference, ThoriumInstall, WorkspaceSettings,
+    validate_proxy_url,
 };
 pub use validation::{HttpUrl, IanaTimeZone, LocaleTag, Name};

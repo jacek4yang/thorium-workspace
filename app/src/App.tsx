@@ -2,11 +2,12 @@
  * The application shell.
  *
  * Owns navigation, the vault lock state every page depends on, the settings
- * that drive the theme, and the toast queue. It deliberately holds no domain
- * state of its own: each page loads what it needs when it is shown, so a
- * stale list can never survive a navigation.
+ * that drive theme and language, and the toast queue. It deliberately holds
+ * no domain state of its own: each page loads what it needs when it is
+ * shown, so a stale list can never survive a navigation.
  */
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { SECTIONS, Sidebar } from "./components/Sidebar";
 import type { SectionId } from "./components/Sidebar";
@@ -14,6 +15,8 @@ import { Icon } from "./components/Icon";
 import { Button, Loading } from "./components/ui";
 import { api } from "./lib/api";
 import { useToasts } from "./lib/hooks";
+import { applyLanguage, isUiLanguage } from "./i18n";
+import { localizedErrorMessage } from "./lib/errors";
 import { VaultStatus, WorkspaceError, WorkspaceSettings } from "./lib/types";
 import AccountsPage from "./pages/AccountsPage";
 import BrowserPage from "./pages/BrowserPage";
@@ -29,25 +32,32 @@ import VaultPage from "./pages/VaultPage";
 const VAULT_POLL_MS = 3000;
 
 /** Applies the theme preference to the document root. */
-function useTheme(settings: WorkspaceSettings | null) {
+function useTheme(theme: WorkspaceSettings["theme"] | undefined) {
   useEffect(() => {
-    const theme = settings?.theme ?? "system";
     if (theme === "system") {
       document.documentElement.removeAttribute("data-theme");
-    } else {
+    } else if (theme) {
       document.documentElement.setAttribute("data-theme", theme);
     }
-  }, [settings?.theme]);
+  }, [theme]);
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const [section, setSection] = useState<SectionId>("dashboard");
   const [vault, setVault] = useState<VaultStatus | null>(null);
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [startupError, setStartupError] = useState<WorkspaceError | null>(null);
   const { toasts, push, dismiss } = useToasts();
 
-  useTheme(settings);
+  useTheme(settings?.theme);
+
+  // Language follows the persisted preference and re-renders immediately.
+  useEffect(() => {
+    if (settings && isUiLanguage(settings.language)) {
+      applyLanguage(settings.language);
+    }
+  }, [settings?.language]);
 
   const refreshVault = useCallback(async () => {
     try {
@@ -97,7 +107,7 @@ export default function App() {
       const target = SECTIONS[index - 1];
       if (target) {
         event.preventDefault();
-        setSection(target.id);
+        setSection(target);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -110,7 +120,7 @@ export default function App() {
     <button
       type="button"
       className="vault-chip"
-      title={locked ? "Open the Vault page" : "Lock the vault now"}
+      title={locked ? t("shell.vaultChip.openToUnlock") : t("shell.vaultChip.lockNow")}
       onClick={async () => {
         if (vault === null || locked) {
           setSection("vault");
@@ -119,9 +129,9 @@ export default function App() {
         try {
           await api.vaultLock();
           setVault(await api.vaultStatus());
-          push("Vault locked");
+          push(t("shell.vaultChip.lockedToast"));
         } catch (thrown) {
-          push(toError(thrown).message, "error");
+          push(localizedErrorMessage(toError(thrown), t), "error");
         }
       }}
     >
@@ -130,12 +140,12 @@ export default function App() {
       />
       <span className="grow truncate">
         {vault === null
-          ? "Checking vault…"
+          ? t("shell.vaultChip.checking")
           : vault.lockState === "missing"
-            ? "Set up your Vault"
+            ? t("shell.vaultChip.missing")
             : vault.lockState === "locked"
-              ? "Vault locked"
-              : "Vault unlocked"}
+              ? t("shell.vaultChip.locked")
+              : t("shell.vaultChip.unlocked")}
       </span>
       <Icon
         name={vault?.lockState === "unlocked" ? "unlock" : "lock"}
@@ -155,17 +165,17 @@ export default function App() {
               <div className="notice error" role="alert">
                 <Icon name="alert" />
                 <div className="notice-body">
-                  <div className="notice-title">The workspace could not be reached</div>
-                  <div className="muted">{startupError.message}</div>
+                  <div className="notice-title">{t("common.workspaceUnreachable")}</div>
+                  <div className="muted">{localizedErrorMessage(startupError, t)}</div>
                   <code>{startupError.code}</code>
                 </div>
                 <Button variant="ghost" size="small" onClick={() => void refreshVault()}>
                   <Icon name="refresh" size={13} />
-                  Retry
+                  {t("common.retry")}
                 </Button>
               </div>
             ) : (
-              <Loading label="Opening the workspace…" />
+              <Loading label={t("common.openingWorkspace")} />
             )}
           </div>
         ) : (
@@ -195,9 +205,10 @@ export default function App() {
                 <SettingsPage settings={settings} onSettingsChanged={setSettings} onToast={push} />
               ) : (
                 <div className="page-body">
-                  <Loading label="Loading settings…" />
+                  <Loading />
                 </div>
               ))}
+
             {section === "diagnostics" && <DiagnosticsPage onToast={push} />}
           </>
         )}
@@ -211,7 +222,7 @@ export default function App() {
                 variant="ghost"
                 size="small"
                 onClick={() => dismiss(toast.id)}
-                aria-label="Dismiss"
+                aria-label={t("common.dismiss")}
               >
                 <Icon name="x" size={12} />
               </Button>

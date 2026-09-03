@@ -1,9 +1,10 @@
 // Accounts belong to Browser Profiles. The page is a two-level list: pick a
 // profile, then manage its account records. Secret operations route through
-// the Vault; when it is locked the page says so and hides nothing important,
-// but every reveal/copy path is disabled and any revealed material is dropped.
+// the Vault; when it is locked the page says so, disables every reveal/copy
+// path, and any revealed material is dropped (see AccountCard).
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import AccountCard from "./AccountCard";
 import {
@@ -24,12 +25,7 @@ import type { ToastFn } from "../lib/hooks";
 import type { Account, AccountInput, BrowserProfile, ServiceKind } from "../lib/types";
 import { WorkspaceError } from "../lib/types";
 
-const SERVICES: { id: ServiceKind; label: string }[] = [
-  { id: { kind: "github" }, label: "GitHub" },
-  { id: { kind: "microsoft" }, label: "Microsoft" },
-  { id: { kind: "google" }, label: "Google" },
-  { id: { kind: "gitlab" }, label: "GitLab" },
-];
+const SERVICE_IDS = ["github", "microsoft", "google", "gitlab"] as const;
 
 const EMPTY_ACCOUNT_FORM = {
   displayName: "",
@@ -71,6 +67,7 @@ export default function AccountsPage({
   onNavigate: (section: SectionId) => void;
   onToast: ToastFn;
 }) {
+  const { t } = useTranslation();
   const [profiles, setProfiles] = useState<BrowserProfile[] | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[] | null>(null);
@@ -128,9 +125,9 @@ export default function AccountsPage({
   if (profiles === null) {
     return (
       <>
-        <PageHeader title="Accounts" subtitle="Credentials and second factors per profile" />
+        <PageHeader title={t("accounts.title")} subtitle={t("accounts.subtitle")} />
         <div className="page-body">
-          <Loading label="Loading profiles…" />
+          <Loading label={t("common.loading")} />
         </div>
       </>
     );
@@ -139,18 +136,15 @@ export default function AccountsPage({
   if (profiles.length === 0) {
     return (
       <>
-        <PageHeader
-          title="Accounts"
-          subtitle="Credentials and second factors per profile"
-        />
+        <PageHeader title={t("accounts.title")} subtitle={t("accounts.subtitle")} />
         <div className="page-body">
           <EmptyState
             icon="accounts"
-            title="No profiles yet"
-            description="Accounts belong to a Browser Profile. Create a profile first, then add its accounts here."
+            title={t("accounts.emptyNoProfiles.title")}
+            description={t("accounts.emptyNoProfiles.description")}
             action={
               <Button variant="primary" icon="plus" onClick={() => onNavigate("profiles")}>
-                Go to Profiles
+                {t("accounts.emptyNoProfiles.action")}
               </Button>
             }
           />
@@ -164,14 +158,18 @@ export default function AccountsPage({
   return (
     <>
       <PageHeader
-        title="Accounts"
-        subtitle={selectedProfile ? `Credentials stored in “${selectedProfile.name}”` : undefined}
+        title={t("accounts.title")}
+        subtitle={
+          selectedProfile
+            ? t("accounts.subtitleFor", { name: selectedProfile.name })
+            : t("accounts.subtitle")
+        }
         actions={
           <>
             <select
               value={profileId ?? ""}
               onChange={(event) => setProfileId(event.target.value)}
-              aria-label="Profile"
+              aria-label={t("accounts.profileLabel")}
               style={{ width: "auto", minWidth: 160 }}
             >
               {profiles.map((profile) => (
@@ -180,22 +178,18 @@ export default function AccountsPage({
                 </option>
               ))}
             </select>
-            <Button
-              variant="primary"
-              icon="plus"
-              onClick={() => setCreateOpen(true)}
-            >
-              New account
+            <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>
+              {t("accounts.newAccount")}
             </Button>
           </>
         }
       />
       <div className="page-body stack">
         {locked && (
-          <Notice tone="info" icon="lock" title="Vault locked">
-            Unlock the Vault to store passwords, import 2FA factors, or reveal secrets.{" "}
+          <Notice tone="info" icon="lock" title={t("shell.vaultChip.locked")}>
+            {t("accounts.lockedNotice")}{" "}
             <Button size="small" onClick={() => onNavigate("vault")}>
-              Unlock Vault
+              {t("accounts.unlockVault")}
             </Button>
           </Notice>
         )}
@@ -203,15 +197,15 @@ export default function AccountsPage({
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
 
         {accounts === null ? (
-          <Loading label="Loading accounts…" />
+          <Loading label={t("common.loading")} />
         ) : accounts.length === 0 ? (
           <EmptyState
             icon="accounts"
-            title="No accounts in this profile"
-            description="An account record holds the service, username, email, encrypted password, 2FA factors, and recovery codes for one login."
+            title={t("accounts.emptyNoAccounts.title")}
+            description={t("accounts.emptyNoAccounts.description")}
             action={
               <Button variant="primary" icon="plus" onClick={() => setCreateOpen(true)}>
-                Add an account
+                {t("accounts.emptyNoAccounts.action")}
               </Button>
             }
           />
@@ -239,7 +233,6 @@ export default function AccountsPage({
       {(createOpen || editTarget) && (
         <AccountDialog
           account={editTarget}
-          busy={false}
           onClose={() => {
             setCreateOpen(false);
             setEditTarget(null);
@@ -248,10 +241,10 @@ export default function AccountsPage({
             try {
               if (account) {
                 await api.accountUpdate({ ...account, ...input });
-                onToast(`Saved “${input.displayName}”`);
+                onToast(t("accounts.toasts.saved", { name: input.displayName }));
               } else if (profileId) {
                 await api.accountCreate(profileId, input);
-                onToast(`Created “${input.displayName}”`);
+                onToast(t("accounts.toasts.created", { name: input.displayName }));
               }
               await reload();
               setError(null);
@@ -266,9 +259,9 @@ export default function AccountsPage({
 
       {deleteTarget && (
         <ConfirmDialog
-          title={`Delete “${deleteTarget.displayName}”?`}
-          message="This permanently deletes the account with its stored password, 2FA factors, and recovery codes. This cannot be undone."
-          confirmLabel="Delete account"
+          title={t("accounts.deleteDialog.title", { name: deleteTarget.displayName })}
+          message={t("accounts.deleteDialog.message")}
+          confirmLabel={t("accounts.deleteDialog.confirm")}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => {
             const target = deleteTarget;
@@ -276,7 +269,7 @@ export default function AccountsPage({
             void (async () => {
               try {
                 await api.accountDelete(target.id);
-                onToast(`Deleted “${target.displayName}”`);
+                onToast(t("accounts.toasts.deleted", { name: target.displayName }));
                 await reload();
               } catch (thrown) {
                 setError(toError(thrown));
@@ -292,15 +285,14 @@ export default function AccountsPage({
 /** Create/edit dialog. `account === null` means create. */
 function AccountDialog({
   account,
-  busy,
   onClose,
   onSubmit,
 }: {
   account: Account | null;
-  busy: boolean;
   onClose: () => void;
   onSubmit: (input: AccountInput, account: Account | null) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState<AccountForm>(() =>
     account
       ? {
@@ -327,70 +319,74 @@ function AccountDialog({
   return (
     <Dialog
       wide
-      title={account ? `Edit “${account.displayName}”` : "New account"}
-      description="Notes and tags are not encrypted metadata; keep secrets in the password field or recovery codes."
+      title={
+        account
+          ? t("accounts.dialog.editTitle", { name: account.displayName })
+          : t("accounts.dialog.createTitle")
+      }
+      description={t("accounts.dialog.description")}
       onClose={onClose}
       footer={
         <>
-          <Button onClick={onClose} disabled={submitting || busy}>
-            Cancel
+          <Button onClick={onClose} disabled={submitting}>
+            {t("common.cancel")}
           </Button>
           <Button
             variant="primary"
             type="submit"
             form="account-form"
-            disabled={submitting || busy || form.displayName.trim().length === 0}
+            disabled={submitting || form.displayName.trim().length === 0}
           >
-            {account ? "Save changes" : "Create account"}
+            {account ? t("accounts.dialog.save") : t("accounts.dialog.create")}
           </Button>
         </>
       }
     >
       <form id="account-form" className="stack" onSubmit={submit}>
         <div className="form-grid">
-          <Field label="Display name">
+          <Field label={t("accounts.dialog.displayName")}>
             {(id) => (
               <input
                 id={id}
                 value={form.displayName}
                 onChange={(event) => setForm({ ...form, displayName: event.target.value })}
-                placeholder="Work GitHub"
+                placeholder={t("accounts.dialog.displayNamePlaceholder")}
                 required
                 autoFocus={account === null}
               />
             )}
           </Field>
-          <Field label="Service">
+          <Field label={t("accounts.dialog.service")}>
             {(id) => (
               <select
                 id={id}
                 value={form.service}
                 onChange={(event) => setForm({ ...form, service: event.target.value })}
               >
-                {SERVICES.map((entry) => (
-                  <option key={entry.id.kind} value={entry.id.kind}>
-                    {entry.label}
+                {SERVICE_IDS.map((service) => (
+                  <option key={service} value={service}>
+                    {t(`accounts.services.${service}`)}
                   </option>
                 ))}
-                <option value="custom">Custom…</option>
+                <option value="custom">{t("accounts.services.custom")}</option>
               </select>
             )}
           </Field>
           {form.service === "custom" && (
-            <Field label="Custom service label">
+            <Field label={t("accounts.dialog.customServiceLabel")}>
               {(id) => (
                 <input
                   id={id}
                   value={form.customLabel}
                   onChange={(event) => setForm({ ...form, customLabel: event.target.value })}
-                  placeholder="Internal Wiki"
+                  placeholder={t("accounts.dialog.customServicePlaceholder")}
                 />
               )}
             </Field>
           )}
         </div>
         <div className="form-grid">
-          <Field label="Username">
+          <Field label={t("accounts.dialog.username")}>
             {(id) => (
               <input
                 id={id}
@@ -400,7 +396,7 @@ function AccountDialog({
               />
             )}
           </Field>
-          <Field label="Email">
+          <Field label={t("accounts.dialog.email")}>
             {(id) => (
               <input
                 id={id}
@@ -411,29 +407,29 @@ function AccountDialog({
               />
             )}
           </Field>
-          <Field label="Login URL">
+          <Field label={t("accounts.dialog.loginUrl")}>
             {(id) => (
               <input
                 id={id}
                 type="url"
                 value={form.loginUrl}
                 onChange={(event) => setForm({ ...form, loginUrl: event.target.value })}
-                placeholder="https://github.com/login"
+                placeholder={t("accounts.dialog.loginUrlPlaceholder")}
               />
             )}
           </Field>
         </div>
-        <Field label="Tags" hint="Comma-separated">
+        <Field label={t("accounts.dialog.tags")} hint={t("accounts.dialog.tagsHint")}>
           {(id) => (
             <input
               id={id}
               value={form.tags}
               onChange={(event) => setForm({ ...form, tags: event.target.value })}
-              placeholder="work, 2fa"
+              placeholder={t("accounts.dialog.tagsPlaceholder")}
             />
           )}
         </Field>
-        <Field label="Notes (non-secret)">
+        <Field label={t("accounts.dialog.notes")}>
           {(id) => (
             <textarea
               id={id}

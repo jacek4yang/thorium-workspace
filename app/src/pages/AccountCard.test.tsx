@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AccountCard from "./AccountCard";
 import { api } from "../lib/api";
+import { initI18n } from "../i18n";
 import type { Account } from "../lib/types";
 
 // vitest runs with globals:false, so cleanup must be explicit.
@@ -43,7 +44,8 @@ const account: Account = {
 
 const noop = () => Promise.resolve();
 
-beforeEach(() => {
+beforeEach(async () => {
+  await initI18n("en-US");
   vi.mocked(api.passwordReveal).mockResolvedValue("s3cret-value");
 });
 

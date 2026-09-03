@@ -1,9 +1,11 @@
 // Diagnostics: safe, redaction-pinned facts about the running workspace,
 // grouped so a developer can scan them quickly. The copy action puts a
 // plain-text report on the clipboard; the backend guarantees these fields
-// never contain secret material.
+// never contain secret material. Codes, paths, and version numbers stay
+// untranslated.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   Badge,
@@ -26,17 +28,9 @@ interface Row {
 }
 
 export default function DiagnosticsPage({ onToast }: { onToast: ToastFn }) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<DiagnosticsSnapshot | null>(null);
   const [error, setError] = useState<WorkspaceError | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      setSnapshot(await api.diagnostics());
-      setError(null);
-    } catch (thrown) {
-      setError(toError(thrown));
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -56,28 +50,37 @@ export default function DiagnosticsPage({ onToast }: { onToast: ToastFn }) {
     };
   }, []);
 
+  const refresh = async () => {
+    try {
+      setSnapshot(await api.diagnostics());
+      setError(null);
+    } catch (thrown) {
+      setError(toError(thrown));
+    }
+  };
+
   const copyReport = async () => {
     if (!snapshot) return;
     try {
-      await navigator.clipboard.writeText(renderReport(snapshot));
-      onToast("Diagnostic report copied — safe to share");
+      await navigator.clipboard.writeText(renderReport(snapshot, t));
+      onToast(t("diagnostics.copiedToast"));
     } catch {
-      onToast("Could not access the clipboard", "error");
+      onToast(t("diagnostics.clipboardFailedToast"), "error");
     }
   };
 
   return (
     <>
       <PageHeader
-        title="Diagnostics"
-        subtitle="Safe runtime facts; this report never contains secret values"
+        title={t("diagnostics.title")}
+        subtitle={t("diagnostics.subtitle")}
         actions={
           <>
             <Button icon="clipboard" disabled={!snapshot} onClick={() => void copyReport()}>
-              Copy report
+              {t("diagnostics.copyReport")}
             </Button>
             <Button icon="refresh" onClick={() => void refresh()}>
-              Refresh
+              {t("common.refresh")}
             </Button>
           </>
         }
@@ -85,32 +88,39 @@ export default function DiagnosticsPage({ onToast }: { onToast: ToastFn }) {
       <div className="page-body stack">
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
         {!snapshot ? (
-          <Loading label="Loading diagnostics…" />
+          <Loading label={t("diagnostics.loading")} />
         ) : (
-          <div className="grid">
-            <Card title="Workspace">
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))" }}>
+            <Card title={t("diagnostics.groups.workspace")}>
               <Rows
                 rows={[
-                  { label: "Path", value: snapshot.workspacePath, mono: true },
+                  { label: t("diagnostics.rows.path"), value: snapshot.workspacePath, mono: true },
                   {
-                    label: "Writable",
-                    value: snapshot.workspaceWritable ? "Yes" : "No",
+                    label: t("diagnostics.rows.writable"),
+                    value: snapshot.workspaceWritable
+                      ? t("diagnostics.rows.existsYes")
+                      : t("diagnostics.rows.existsNo"),
                     tone: snapshot.workspaceWritable ? "success" : "danger",
                   },
-                  { label: "Schema version", value: `v${snapshot.schemaVersion}` },
+                  {
+                    label: t("diagnostics.rows.schemaVersion"),
+                    value: t("diagnostics.rows.schemaValue", { version: snapshot.schemaVersion }),
+                  },
                 ]}
               />
             </Card>
 
-            <Card title="Vault">
+            <Card title={t("diagnostics.groups.vault")}>
               <Rows
                 rows={[
                   {
-                    label: "Exists",
-                    value: snapshot.vaultExists ? "Yes" : "Not created",
+                    label: t("diagnostics.rows.exists"),
+                    value: snapshot.vaultExists
+                      ? t("diagnostics.rows.existsYes")
+                      : t("diagnostics.rows.existsNo"),
                   },
                   {
-                    label: "State",
+                    label: t("diagnostics.rows.state"),
                     value: snapshot.vaultExists ? snapshot.vaultLockState : "—",
                     tone:
                       snapshot.vaultLockState === "unlocked"
@@ -120,29 +130,29 @@ export default function DiagnosticsPage({ onToast }: { onToast: ToastFn }) {
                           : undefined,
                   },
                   {
-                    label: "Idle lock",
+                    label: t("diagnostics.rows.idleLock"),
                     value: snapshot.idleLockMinutes
-                      ? `${snapshot.idleLockMinutes} min`
-                      : "disabled",
+                      ? t("diagnostics.rows.minutes", { count: snapshot.idleLockMinutes })
+                      : t("diagnostics.rows.disabled"),
                   },
                 ]}
               />
             </Card>
 
-            <Card title="Thorium">
+            <Card title={t("diagnostics.groups.thorium")}>
               <Rows
                 rows={[
                   {
-                    label: "Installed versions",
+                    label: t("diagnostics.rows.installedVersions"),
                     value:
                       snapshot.installedThoriumVersions.length === 0
-                        ? "None"
+                        ? t("common.none")
                         : snapshot.installedThoriumVersions.join(", "),
                     mono: snapshot.installedThoriumVersions.length > 0,
                   },
                   {
-                    label: "Current",
-                    value: snapshot.currentThoriumVersion ?? "Not selected",
+                    label: t("diagnostics.rows.current"),
+                    value: snapshot.currentThoriumVersion ?? t("diagnostics.rows.notSelected"),
                     mono: snapshot.currentThoriumVersion !== null,
                     tone: snapshot.currentThoriumVersion ? "success" : "warning",
                   },
@@ -150,34 +160,32 @@ export default function DiagnosticsPage({ onToast }: { onToast: ToastFn }) {
               />
             </Card>
 
-            <Card title="Runtime">
+            <Card title={t("diagnostics.groups.runtime")}>
               <Rows
                 rows={[
                   {
-                    label: "Running profiles",
+                    label: t("diagnostics.rows.runningProfiles"),
                     value:
                       snapshot.runningProfiles.length === 0
-                        ? "None"
+                        ? t("common.none")
                         : `${snapshot.runningProfiles.length}`,
                   },
                   {
-                    label: "Clipboard clear",
-                    value: `${snapshot.clipboardClearSeconds} s`,
+                    label: t("diagnostics.rows.clipboardClear"),
+                    value: t("diagnostics.rows.seconds", { count: snapshot.clipboardClearSeconds }),
                   },
                 ]}
               />
               {snapshot.runningProfiles.length > 0 && (
                 <p className="faint" style={{ marginTop: 8 }}>
-                  Profile IDs: <span className="mono">{snapshot.runningProfiles.join(", ")}</span>
+                  {t("diagnostics.rows.profileIds")}{" "}
+                  <span className="mono">{snapshot.runningProfiles.join(", ")}</span>
                 </p>
               )}
             </Card>
           </div>
         )}
-        <p className="faint">
-          These values are redacted at the Rust boundary. A copied report is safe to attach to a
-          bug report.
-        </p>
+        <p className="faint">{t("diagnostics.footer")}</p>
       </div>
     </>
   );
@@ -204,20 +212,27 @@ function Rows({ rows }: { rows: Row[] }) {
   );
 }
 
-function renderReport(snapshot: DiagnosticsSnapshot): string {
+function renderReport(
+  snapshot: DiagnosticsSnapshot,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
   return [
     "Thorium Workspace diagnostic report",
     "-----------------------------------",
-    `workspace path:        ${snapshot.workspacePath}`,
-    `workspace writable:    ${snapshot.workspaceWritable}`,
-    `schema version:        ${snapshot.schemaVersion}`,
-    `vault exists:          ${snapshot.vaultExists}`,
-    `vault lock state:      ${snapshot.vaultExists ? snapshot.vaultLockState : "missing"}`,
-    `vault idle lock:       ${snapshot.idleLockMinutes ? `${snapshot.idleLockMinutes} min` : "disabled"}`,
-    `thorium installed:     ${snapshot.installedThoriumVersions.join(", ") || "none"}`,
-    `thorium current:       ${snapshot.currentThoriumVersion ?? "none"}`,
-    `running profiles:      ${snapshot.runningProfiles.length}`,
-    `clipboard clear:       ${snapshot.clipboardClearSeconds} s`,
+    `${t("diagnostics.rows.path")}:              ${snapshot.workspacePath}`,
+    `${t("diagnostics.rows.writable")}:          ${snapshot.workspaceWritable}`,
+    `${t("diagnostics.rows.schemaVersion")}:     v${snapshot.schemaVersion}`,
+    `${t("diagnostics.rows.exists")}:            ${snapshot.vaultExists}`,
+    `${t("diagnostics.rows.state")}:             ${snapshot.vaultExists ? snapshot.vaultLockState : "missing"}`,
+    `${t("diagnostics.rows.idleLock")}:          ${
+      snapshot.idleLockMinutes
+        ? t("diagnostics.rows.minutes", { count: snapshot.idleLockMinutes })
+        : t("diagnostics.rows.disabled")
+    }`,
+    `${t("diagnostics.rows.installedVersions")}: ${snapshot.installedThoriumVersions.join(", ") || "none"}`,
+    `${t("diagnostics.rows.current")}:           ${snapshot.currentThoriumVersion ?? "none"}`,
+    `${t("diagnostics.rows.runningProfiles")}:   ${snapshot.runningProfiles.length}`,
+    `${t("diagnostics.rows.clipboardClear")}:    ${t("diagnostics.rows.seconds", { count: snapshot.clipboardClearSeconds })}`,
   ].join("\n");
 }
 

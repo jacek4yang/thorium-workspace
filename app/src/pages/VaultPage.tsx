@@ -4,6 +4,7 @@
 // unlocked) each get their own focused layout.
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "../components/Icon";
 import {
@@ -34,6 +35,7 @@ export default function VaultPage({
   onVaultChanged: (status: VaultStatus) => void;
   onToast: ToastFn;
 }) {
+  const { t } = useTranslation();
   const [error, setError] = useState<WorkspaceError | null>(null);
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
@@ -59,18 +61,16 @@ export default function VaultPage({
 
   const idleLock = settings?.vaultIdleLockMinutes ?? null;
 
+  const subtitle =
+    vault.lockState === "unlocked"
+      ? t("vault.subtitleUnlocked")
+      : vault.lockState === "locked"
+        ? t("vault.subtitleLocked")
+        : t("vault.subtitleMissing");
+
   return (
     <>
-      <PageHeader
-        title="Vault"
-        subtitle={
-          vault.lockState === "unlocked"
-            ? "Unlocked — secrets can be stored and revealed"
-            : vault.lockState === "locked"
-              ? "Locked — account secrets are sealed"
-              : "Not created yet"
-        }
-      />
+      <PageHeader title={t("vault.title")} subtitle={subtitle} />
       <div className="page-body">
         <div className="onboarding" style={{ height: "auto", padding: 0 }}>
           <div className="stack" style={{ width: "min(520px, 100%)" }}>
@@ -78,37 +78,30 @@ export default function VaultPage({
 
             {vault.lockState === "missing" && (
               <Card
-                title="Create your Vault"
-                subtitle="One encrypted container for every secret in this workspace"
+                title={t("vault.create.title")}
+                subtitle={t("vault.create.subtitle")}
               >
                 <div className="stack">
-                  <p className="muted">
-                    The Vault encrypts account passwords, OTP seeds, and recovery codes with
-                    Argon2id + ChaCha20-Poly1305. The master password is never stored anywhere —
-                    if you lose it, the secrets are unrecoverable.
-                  </p>
+                  <p className="muted">{t("vault.create.description")}</p>
                   <form
                     className="stack"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void run(async () => {
                         if (password !== confirm) {
-                          throw new WorkspaceError(
-                            "FRONTEND_MISMATCH",
-                            "Passwords do not match.",
-                          );
+                          throw new WorkspaceError("FRONTEND_MISMATCH", t("common.errors.FRONTEND_MISMATCH"));
                         }
                         if (!isPasswordUsable(password)) {
                           throw new WorkspaceError(
                             "FRONTEND_WEAK_PASSWORD",
-                            "Use at least 8 characters.",
+                            t("common.errors.FRONTEND_WEAK_PASSWORD"),
                           );
                         }
                         await api.vaultCreate(password);
-                      }, "Vault created");
+                      }, t("vault.toasts.created"));
                     }}
                   >
-                    <Field label="Master password" hint="8–200 characters. Not recoverable.">
+                    <Field label={t("vault.create.masterPassword")} hint={t("vault.create.masterPasswordHint")}>
                       {(id) => (
                         <input
                           id={id}
@@ -120,7 +113,7 @@ export default function VaultPage({
                         />
                       )}
                     </Field>
-                    <Field label="Confirm master password">
+                    <Field label={t("vault.create.confirm")}>
                       {(id) => (
                         <input
                           id={id}
@@ -134,7 +127,7 @@ export default function VaultPage({
                     </Field>
                     <Button variant="primary" type="submit" disabled={busy}>
                       {busy ? <span className="spinner" /> : null}
-                      Create Vault
+                      {t("vault.create.action")}
                     </Button>
                   </form>
                 </div>
@@ -142,15 +135,15 @@ export default function VaultPage({
             )}
 
             {vault.lockState === "locked" && (
-              <Card title="Vault is locked" subtitle="Enter the master password to unlock">
+              <Card title={t("vault.locked.title")} subtitle={t("vault.locked.subtitle")}>
                 <form
                   className="stack"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void run(() => api.vaultUnlock(password), "Vault unlocked");
+                    void run(() => api.vaultUnlock(password), t("vault.toasts.unlocked"));
                   }}
                 >
-                  <Field label="Master password">
+                  <Field label={t("vault.locked.masterPassword")}>
                     {(id) => (
                       <input
                         id={id}
@@ -165,13 +158,17 @@ export default function VaultPage({
                   </Field>
                   <Button variant="primary" type="submit" disabled={busy}>
                     {busy ? <span className="spinner" /> : null}
-                    Unlock
+                    {t("vault.locked.action")}
                   </Button>
                   {idleLock !== null && (
                     <p className="faint">
-                      The Vault locks automatically after {idleLock}{" "}
-                      {idleLock === 1 ? "minute" : "minutes"} of inactivity
-                      {settings?.vaultLockOnMinimize ? " and when the window is minimized" : ""}.
+                      {t(
+                        idleLock === 1
+                          ? "vault.locked.autoLockHint"
+                          : "vault.locked.autoLockHint_other",
+                        { count: idleLock },
+                      )}
+                      {settings?.vaultLockOnMinimize ? t("vault.locked.minimizeSuffix") : ""}.
                     </p>
                   )}
                 </form>
@@ -185,33 +182,39 @@ export default function VaultPage({
                     <div className="row" style={{ flexWrap: "nowrap" }}>
                       <Icon name="unlock" size={18} style={{ color: "var(--success)" }} />
                       <div>
-                        <strong>Vault unlocked</strong>
+                        <strong>{t("vault.unlocked.title")}</strong>
                         <div className="faint">
                           {idleLock !== null
-                            ? `Auto-locks after ${idleLock} ${
-                                idleLock === 1 ? "minute" : "minutes"
-                              } of inactivity`
-                            : "Idle auto-lock is disabled in Settings"}
-                          {settings?.vaultLockOnMinimize ? " · locks on minimize" : ""}
+                            ? t(
+                                idleLock === 1
+                                  ? "vault.unlocked.autoLocks"
+                                  : "vault.unlocked.autoLocks_other",
+                                { count: idleLock },
+                              )
+                            : t("vault.unlocked.idleDisabled")}
+                          {settings?.vaultLockOnMinimize ? t("vault.unlocked.locksOnMinimize") : ""}
                         </div>
                       </div>
                     </div>
-                    <Button icon="lock" disabled={busy} onClick={() => void run(() => api.vaultLock(), "Vault locked")}>
-                      Lock now
+                    <Button
+                      icon="lock"
+                      disabled={busy}
+                      onClick={() => void run(() => api.vaultLock(), t("vault.toasts.locked"))}
+                    >
+                      {t("vault.unlocked.lockNow")}
                     </Button>
                   </div>
                 </Card>
 
                 <Card
-                  title="Master password"
-                  subtitle="Changing it re-encrypts the Vault under the new password"
+                  title={t("vault.change.title")}
+                  subtitle={t("vault.change.subtitle")}
                 >
                   <Button onClick={() => setChangeOpen(true)} disabled={busy}>
-                    Change master password…
+                    {t("vault.change.action")}
                   </Button>
                   <p className="faint" style={{ marginTop: 12 }}>
-                    While unlocked, secrets are available to the Accounts page. Locking removes
-                    every revealed value from the interface immediately.
+                    {t("vault.change.whileUnlocked")}
                   </p>
                 </Card>
               </>
@@ -232,7 +235,7 @@ export default function VaultPage({
                 await api.vaultChangePassword(current, next);
                 setChangeOpen(false);
               },
-              "Master password changed",
+              t("vault.toasts.changed"),
             )
           }
         />
@@ -250,6 +253,7 @@ function ChangePasswordDialog({
   onClose: () => void;
   onSubmit: (current: string, next: string) => void;
 }) {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -258,23 +262,27 @@ function ChangePasswordDialog({
 
   return (
     <Dialog
-      title="Change master password"
-      description="The Vault is re-encrypted under the new password. Keep a backup of the old password until you have verified the change."
+      title={t("vault.change.dialogTitle")}
+      description={t("vault.change.dialogDescription")}
       onClose={onClose}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </Button>
-          <Button variant="primary" disabled={!usable || busy} onClick={() => onSubmit(current, next)}>
+          <Button
+            variant="primary"
+            disabled={!usable || busy}
+            onClick={() => onSubmit(current, next)}
+          >
             {busy ? <span className="spinner" /> : null}
-            Change password
+            {t("vault.change.changeAction")}
           </Button>
         </>
       }
     >
       <div className="stack">
-        <Field label="Current master password">
+        <Field label={t("vault.change.current")}>
           {(id) => (
             <input
               id={id}
@@ -285,7 +293,7 @@ function ChangePasswordDialog({
             />
           )}
         </Field>
-        <Field label="New master password" hint="8–200 characters">
+        <Field label={t("vault.change.new")} hint={t("vault.change.newHint")}>
           {(id) => (
             <input
               id={id}
@@ -296,7 +304,7 @@ function ChangePasswordDialog({
             />
           )}
         </Field>
-        <Field label="Confirm new master password">
+        <Field label={t("vault.change.confirm")}>
           {(id) => (
             <input
               id={id}
@@ -308,7 +316,7 @@ function ChangePasswordDialog({
           )}
         </Field>
         {next.length > 0 && !isPasswordUsable(next) && (
-          <p className="faint">Use between 8 and 200 characters.</p>
+          <p className="faint">{t("vault.change.lengthWarning")}</p>
         )}
       </div>
     </Dialog>
@@ -318,5 +326,11 @@ function ChangePasswordDialog({
 function toError(thrown: unknown): WorkspaceError {
   return thrown instanceof WorkspaceError
     ? thrown
-    : new WorkspaceError("FRONTEND_UNKNOWN", String(thrown));
+    : new WorkspaceError("FRONTEND_UNKNOWN", localizedFallback(thrown));
+}
+
+/** Backend errors are already localized by the caller's `run`; anything
+ * else falls back to the string form. */
+function localizedFallback(thrown: unknown): string {
+  return thrown instanceof WorkspaceError ? thrown.message : String(thrown);
 }

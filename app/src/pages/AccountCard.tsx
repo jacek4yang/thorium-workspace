@@ -4,6 +4,7 @@
 // vault locks, all revealed material is dropped immediately.
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "../components/Icon";
 import {
@@ -24,17 +25,18 @@ import type {
 } from "../lib/types";
 import { WorkspaceError } from "../lib/types";
 
-const SERVICES: { id: ServiceKind; label: string }[] = [
-  { id: { kind: "github" }, label: "GitHub" },
-  { id: { kind: "microsoft" }, label: "Microsoft" },
-  { id: { kind: "google" }, label: "Google" },
-  { id: { kind: "gitlab" }, label: "GitLab" },
-];
+const SERVICE_IDS = ["github", "microsoft", "google", "gitlab"] as const;
 
-export function serviceLabel(kind: ServiceKind): string {
+/** Presentable service name; custom labels are shown as the user typed them. */
+export function serviceLabel(
+  kind: ServiceKind,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
   return kind.kind === "custom"
     ? kind.label
-    : (SERVICES.find((entry) => entry.id.kind === kind.kind)?.label ?? kind.kind);
+    : SERVICE_IDS.includes(kind.kind as (typeof SERVICE_IDS)[number])
+      ? t(`accounts.services.${kind.kind}`)
+      : kind.kind;
 }
 
 export default function AccountCard({
@@ -55,6 +57,7 @@ export default function AccountCard({
   onError: (error: WorkspaceError | null) => void;
   onToast: ToastFn;
 }) {
+  const { t } = useTranslation();
   const [revealed, setRevealed] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [openPassword, setOpenPassword] = useState(false);
@@ -94,16 +97,18 @@ export default function AccountCard({
         <div className="grow stack-tight" style={{ minWidth: 0 }}>
           <div className="row" style={{ flexWrap: "nowrap" }}>
             <strong style={{ fontSize: 15 }}>{account.displayName}</strong>
-            <Badge tone="accent">{serviceLabel(account.serviceKind)}</Badge>
+            <Badge tone="accent">{serviceLabel(account.serviceKind, t)}</Badge>
             {account.passwordRef ? (
-              <Badge icon="key">Password</Badge>
+              <Badge icon="key">{t("accountCard.password")}</Badge>
             ) : (
-              <Badge tone="warning">No password</Badge>
+              <Badge tone="warning">{t("accountCard.noPassword")}</Badge>
             )}
-            {account.factors.length > 0 && <Badge>2FA · {account.factors.length}</Badge>}
+            {account.factors.length > 0 && (
+              <Badge>{t("accountCard.twoFactor", { count: account.factors.length })}</Badge>
+            )}
           </div>
           <div className="muted truncate">
-            {account.username ?? "no username"}
+            {account.username ?? t("accountCard.noUsername")}
             {account.username && account.email ? " · " : ""}
             {account.email ?? ""}
           </div>
@@ -127,15 +132,15 @@ export default function AccountCard({
                 size="small"
                 icon="clipboard"
                 disabled={locked}
-                title="Copy password (clipboard clears automatically)"
+                title={t("accountCard.copyTitle")}
                 onClick={() =>
                   void run(async () => {
                     const seconds = await api.passwordCopy(account.id);
-                    onToast(`Password copied — clipboard clears in ${seconds}s`);
+                    onToast(t("accountCard.copiedToast", { count: seconds }));
                   })
                 }
               >
-                Copy
+                {t("accountCard.copy")}
               </Button>
               <Button
                 size="small"
@@ -151,15 +156,15 @@ export default function AccountCard({
                   })
                 }
               >
-                {revealed === null ? "Reveal" : "Hide"}
+                {revealed === null ? t("accountCard.reveal") : t("accountCard.hide")}
               </Button>
             </>
           )}
           <Button size="small" icon="edit" onClick={onEdit}>
-            Edit
+            {t("common.edit")}
           </Button>
           <Button size="small" variant="danger" icon="trash" onClick={onDelete}>
-            Delete
+            {t("common.delete")}
           </Button>
         </div>
       </div>
@@ -171,15 +176,15 @@ export default function AccountCard({
       )}
 
       {locked && account.passwordRef && (
-        <Notice tone="info" icon="lock" title="Vault locked">
-          Unlock the Vault to copy or reveal this password.
+        <Notice tone="info" icon="lock" title={t("shell.vaultChip.locked")}>
+          {t("accountCard.lockedNotice")}
         </Notice>
       )}
 
       <div>
         <Disclosure
-          label="Password"
-          meta={account.passwordRef ? "stored" : "not set"}
+          label={t("accountCard.sections.password")}
+          meta={account.passwordRef ? t("accountCard.sections.stored") : t("accountCard.sections.notSet")}
           open={openPassword}
           onToggle={() => setOpenPassword(!openPassword)}
         >
@@ -187,7 +192,7 @@ export default function AccountCard({
             <div className="row">
               <input
                 type="password"
-                placeholder="New password"
+                placeholder={t("accountCard.passwordSection.newPlaceholder")}
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 style={{ maxWidth: 260 }}
@@ -201,35 +206,36 @@ export default function AccountCard({
                       await api.passwordSet(account.id, newPassword);
                       setNewPassword("");
                     },
-                    "Password stored",
+                    t("accountCard.passwordSection.storedToast"),
                   )
                 }
               >
-                Set password
+                {t("accountCard.passwordSection.set")}
               </Button>
               {account.passwordRef && (
                 <Button
                   variant="danger"
                   onClick={() =>
-                    void run(() => api.passwordDelete(account.id), "Password removed")
+                    void run(
+                      () => api.passwordDelete(account.id),
+                      t("accountCard.passwordSection.removedToast"),
+                    )
                   }
                 >
-                  Remove password
+                  {t("accountCard.passwordSection.remove")}
                 </Button>
               )}
             </div>
-            <p className="faint">
-              Passwords are encrypted in the Vault and never written to the profile or logs.
-            </p>
+            <p className="faint">{t("accountCard.passwordSection.hint")}</p>
           </div>
         </Disclosure>
 
         <Disclosure
-          label="Second factors"
+          label={t("accountCard.sections.factors")}
           meta={
             account.factors.length > 0
-              ? `${account.factors.length} configured`
-              : "none"
+              ? t("accountCard.sections.factorsCount", { count: account.factors.length })
+              : t("accountCard.sections.factorsNone")
           }
           open={openFactors}
           onToggle={() => setOpenFactors(!openFactors)}
@@ -244,8 +250,10 @@ export default function AccountCard({
         </Disclosure>
 
         <Disclosure
-          label="Recovery codes"
-          meta={`${account.recoveryCodes.filter((code) => !code.used).length} unused`}
+          label={t("accountCard.sections.recovery")}
+          meta={t("accountCard.sections.recoveryUnused", {
+            count: account.recoveryCodes.filter((code) => !code.used).length,
+          })}
           open={openRecovery}
           onToggle={() => setOpenRecovery(!openRecovery)}
         >
@@ -277,6 +285,7 @@ function FactorsSection({
   onError: (error: WorkspaceError | null) => void;
   onToast: ToastFn;
 }) {
+  const { t } = useTranslation();
   const [otpUri, setOtpUri] = useState("");
   const [externalLabel, setExternalLabel] = useState("");
   const [liveCodeId, setLiveCodeId] = useState<string | null>(null);
@@ -295,10 +304,7 @@ function FactorsSection({
   return (
     <div className="stack-tight">
       {account.factors.length === 0 && (
-        <p className="faint">
-          No second factors. Import a standard otpauth:// URI or a QR image exported by another
-          authenticator.
-        </p>
+        <p className="faint">{t("accountCard.factorsSection.empty")}</p>
       )}
       <ul className="stack-tight" style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {account.factors.map((factor) => (
@@ -309,7 +315,7 @@ function FactorsSection({
               locked={locked}
               onToggle={() => setLiveCodeId(liveCodeId === factor.id ? null : factor.id)}
               onRemoved={() =>
-                void run(() => api.factorDelete(factor.id), "Factor removed")
+                void run(() => api.factorDelete(factor.id))
               }
             />
           </li>
@@ -318,11 +324,11 @@ function FactorsSection({
 
       <div className="row">
         <input
-          placeholder="otpauth://totp/…"
+          placeholder={t("accountCard.factorsSection.uriPlaceholder")}
           value={otpUri}
           onChange={(event) => setOtpUri(event.target.value)}
           style={{ maxWidth: 280 }}
-          aria-label="otpauth URI"
+          aria-label={t("accountCard.uriAria")}
         />
         <Button
           size="small"
@@ -331,10 +337,10 @@ function FactorsSection({
             void run(async () => {
               await api.factorImportOtpauth(account.id, otpUri);
               setOtpUri("");
-            }, "Factor imported")
+            }, t("accountCard.factorsSection.importedToast"))
           }
         >
-          Import URI
+          {t("accountCard.factorsSection.importUri")}
         </Button>
         <Button
           size="small"
@@ -350,23 +356,23 @@ function FactorsSection({
                   async () => {
                     await api.factorImportQrFile(account.id, selection);
                   },
-                  "Factor imported from QR",
+                  t("accountCard.factorsSection.importedFromQrToast"),
                 );
               }
             })()
           }
         >
-          Import QR image…
+          {t("accountCard.factorsSection.importQr")}
         </Button>
       </div>
 
       <div className="row">
         <input
-          placeholder="External authenticator label (e.g. Microsoft Authenticator push)"
+          placeholder={t("accountCard.factorsSection.externalLabelPlaceholder")}
           value={externalLabel}
           onChange={(event) => setExternalLabel(event.target.value)}
           style={{ maxWidth: 280 }}
-          aria-label="External authenticator label"
+          aria-label={t("accountCard.factorsSection.externalLabelPlaceholder")}
         />
         <Button
           size="small"
@@ -375,16 +381,13 @@ function FactorsSection({
             void run(async () => {
               await api.factorAddExternal(account.id, externalLabel.trim(), null);
               setExternalLabel("");
-            }, "External authenticator reference added")
+            }, t("accountCard.factorsSection.externalAddedToast"))
           }
         >
-          Add external reference
+          {t("accountCard.factorsSection.addExternal")}
         </Button>
       </div>
-      <p className="faint">
-        External authenticators (push, number matching, passkeys) are represented as references
-        only — their secrets never enter this workspace.
-      </p>
+      <p className="faint">{t("accountCard.factorsSection.externalHint")}</p>
     </div>
   );
 }
@@ -402,10 +405,7 @@ function FactorRow({
   onToggle: () => void;
   onRemoved: () => void;
 }) {
-  const kindLabel =
-    factor.kind === "external"
-      ? "External"
-      : factor.kind.toUpperCase();
+  const { t } = useTranslation();
   const detail = [
     factor.issuer,
     factor.accountLabel,
@@ -423,11 +423,17 @@ function FactorRow({
       <>
         <Icon name="shield" size={15} />
         <div className="grow">
-          <div>{factor.label ?? "External authenticator"}</div>
+          <div>{factor.label ?? t("accountCard.factorsSection.externalFallback")}</div>
           {detail && <div className="faint">{detail}</div>}
         </div>
-        <Button size="small" variant="danger" icon="trash" onClick={onRemoved} aria-label="Remove factor">
-          Remove
+        <Button
+          size="small"
+          variant="danger"
+          icon="trash"
+          onClick={onRemoved}
+          aria-label={t("accountCard.removeFactorAria")}
+        >
+          {t("common.remove")}
         </Button>
       </>
     );
@@ -438,7 +444,7 @@ function FactorRow({
       <Icon name="clock" size={15} />
       <div className="grow">
         <div className="row" style={{ flexWrap: "nowrap" }}>
-          <span>{factor.label ?? factor.issuer ?? kindLabel}</span>
+          <span>{factor.label ?? factor.issuer ?? factor.kind.toUpperCase()}</span>
           <span className="faint mono">{detail}</span>
         </div>
         {expanded && (
@@ -451,16 +457,18 @@ function FactorRow({
         )}
       </div>
       <Button size="small" onClick={onToggle} aria-expanded={expanded}>
-        {expanded ? "Hide code" : "Generate code"}
+        {expanded
+          ? t("accountCard.factorsSection.hideCode")
+          : t("accountCard.factorsSection.generateCode")}
       </Button>
       <Button
         size="small"
         variant="danger"
         icon="trash"
         onClick={onRemoved}
-        aria-label="Remove factor"
+        aria-label={t("accountCard.removeFactorAria")}
       >
-        Remove
+        {t("common.remove")}
       </Button>
     </>
   );
@@ -482,6 +490,7 @@ function LiveCode({
   period: number;
   locked: boolean;
 }) {
+  const { t } = useTranslation();
   const [code, setCode] = useState<OtpCode | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -498,7 +507,7 @@ function LiveCode({
           setError(null);
         }
       } catch {
-        if (active) setError("Code generation failed — is the Vault unlocked?");
+        if (active) setError(t("accountCard.factorsSection.generationFailed"));
       }
     };
     void generate();
@@ -516,6 +525,7 @@ function LiveCode({
       active = false;
       window.clearInterval(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factorId, isTotp, period, locked]);
 
   // A locked vault stops the timer (see the effect cleanup) and hides any
@@ -527,13 +537,13 @@ function LiveCode({
     return <p className="faint">{error}</p>;
   }
   if (!code) {
-    return <p className="faint">Generating…</p>;
+    return <p className="faint">{t("accountCard.factorsSection.generating")}</p>;
   }
   return (
     <div className="code-display" style={{ marginTop: 8 }}>
       <CodeRing remaining={remaining} period={period} />
       <span className="code-value selectable">{code.code}</span>
-      <span className="faint">{remaining}s</span>
+      <span className="faint">{t("accountCard.factorsSection.secondsRemaining", { count: remaining })}</span>
     </div>
   );
 }
@@ -553,6 +563,7 @@ function RecoverySection({
   onError: (error: WorkspaceError | null) => void;
   onToast: ToastFn;
 }) {
+  const { t } = useTranslation();
   const [codes, setCodes] = useState<RecoveryCode[] | null>(null);
   const [newCodes, setNewCodes] = useState("");
 
@@ -589,19 +600,29 @@ function RecoverySection({
             })
           }
         >
-          List codes
+          {t("accountCard.recoverySection.listCodes")}
         </Button>
       </div>
       {codes && (
         <ul className="stack-tight" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {codes.length === 0 && <li className="faint">No recovery codes stored.</li>}
+          {codes.length === 0 && (
+            <li className="faint">{t("accountCard.recoverySection.empty")}</li>
+          )}
           {codes.map((code) => (
             <li key={code.id} className="list-row">
-              <span className="mono">#{code.position}</span>
+              <span className="mono">
+                {t("accountCard.recoverySection.slot", { position: code.position })}
+              </span>
               {code.used ? (
-                <Badge tone="danger">Used{code.markedUsedAt ? ` · ${formatWhen(code.markedUsedAt)}` : ""}</Badge>
+                <Badge tone="danger">
+                  {code.markedUsedAt
+                    ? t("accountCard.recoverySection.usedAt", {
+                        when: formatWhen(code.markedUsedAt),
+                      })
+                    : t("accountCard.recoverySection.used")}
+                </Badge>
               ) : (
-                <Badge tone="success">Unused</Badge>
+                <Badge tone="success">{t("accountCard.recoverySection.unused")}</Badge>
               )}
               <div className="grow" />
               {!code.used && (
@@ -612,10 +633,10 @@ function RecoverySection({
                     void run(async () => {
                       await api.recoveryMarkUsed(code.id);
                       await reload();
-                    }, "Marked as used")
+                    }, t("accountCard.recoverySection.markedUsedToast"))
                   }
                 >
-                  Mark used
+                  {t("accountCard.recoverySection.markUsed")}
                 </Button>
               )}
               <Button
@@ -627,11 +648,13 @@ function RecoverySection({
                   void run(async () => {
                     await api.recoveryDelete(code.id);
                     await reload();
-                  }, "Recovery code removed")
+                  }, t("accountCard.recoverySection.removedToast"))
                 }
-                aria-label={`Remove recovery code ${code.position}`}
+                aria-label={t("accountCard.recoverySection.removeAria", {
+                  position: code.position,
+                })}
               >
-                Remove
+                {t("common.remove")}
               </Button>
             </li>
           ))}
@@ -639,12 +662,12 @@ function RecoverySection({
       )}
       <div className="row">
         <textarea
-          placeholder="Paste recovery codes, one per line"
+          placeholder={t("accountCard.recoverySection.addPlaceholder")}
           value={newCodes}
           onChange={(event) => setNewCodes(event.target.value)}
           rows={2}
           style={{ maxWidth: 320 }}
-          aria-label="New recovery codes"
+          aria-label={t("accountCard.recoverySection.addAria")}
         />
         <Button
           disabled={locked || newCodes.trim().length === 0}
@@ -658,16 +681,13 @@ function RecoverySection({
               await api.recoveryAdd(accountId, values);
               setNewCodes("");
               await reload();
-            }, "Recovery codes stored")
+            }, t("accountCard.recoverySection.addedToast"))
           }
         >
-          Add codes
+          {t("accountCard.recoverySection.add")}
         </Button>
       </div>
-      <p className="faint">
-        Recovery codes are encrypted in the Vault; only their used/unused status is stored in the
-        database.
-      </p>
+      <p className="faint">{t("accountCard.recoverySection.hint")}</p>
     </div>
   );
 }

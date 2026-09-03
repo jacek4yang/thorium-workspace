@@ -7,9 +7,11 @@
  */
 import { useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
+import { localizedErrorMessage } from "../lib/errors";
 import type { WorkspaceError } from "../lib/types";
 
 /* ---- Buttons ----------------------------------------------------------- */
@@ -129,17 +131,22 @@ export function Field({
 
 /* ---- Feedback ----------------------------------------------------------- */
 
-/** An error, rendered with its diagnostic code. */
+/** An error: localized explanation for known diagnostic codes, the original
+ * backend message as detail, and the code itself for diagnosability. */
 export function ErrorNotice({ error, onDismiss }: { error: WorkspaceError; onDismiss?: () => void }) {
+  const { t } = useTranslation();
+  const localized = localizedErrorMessage(error, t);
+  const detail = localized !== error.message ? error.message : null;
   return (
     <div className="notice error" role="alert">
       <Icon name="alert" />
       <div className="notice-body">
-        <div className="notice-title">{error.message}</div>
+        <div className="notice-title">{localized}</div>
+        {detail ? <div className="muted">{detail}</div> : null}
         <code>{error.code}</code>
       </div>
       {onDismiss ? (
-        <Button variant="ghost" size="small" onClick={onDismiss} aria-label="Dismiss error">
+        <Button variant="ghost" size="small" onClick={onDismiss} aria-label={t("common.dismissError")}>
           <Icon name="x" size={13} />
         </Button>
       ) : null}
@@ -197,11 +204,13 @@ export function EmptyState({
 }
 
 /** A spinner with an accessible loading label. */
-export function Loading({ label = "Loading…" }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const { t } = useTranslation();
+  const text = label ?? t("common.loading");
   return (
     <div className="row" role="status">
       <span className="spinner" />
-      <span className="muted">{label}</span>
+      <span className="muted">{text}</span>
     </div>
   );
 }
@@ -286,6 +295,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog
       title={title}
@@ -293,7 +303,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button onClick={onCancel} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant={destructive ? "danger" : "primary"}
@@ -370,7 +380,8 @@ export function CodeRing({ remaining, period }: { remaining: number; period: num
 
 /* ---- Page scaffolding ------------------------------------------------------ */
 
-/** The header strip at the top of every page. */
+/** The header strip at the top of every page. Its content shares the bounded,
+ * centered geometry of the page canvas. */
 export function PageHeader({
   title,
   subtitle,
@@ -382,11 +393,13 @@ export function PageHeader({
 }) {
   return (
     <header className="page-header">
-      <div className="grow">
-        <h1>{title}</h1>
-        {subtitle ? <p className="page-header-subtitle">{subtitle}</p> : null}
+      <div className="page-header-inner">
+        <div className="grow" style={{ minWidth: 0 }}>
+          <h1>{title}</h1>
+          {subtitle ? <p className="page-header-subtitle">{subtitle}</p> : null}
+        </div>
+        {actions ? <div className="row">{actions}</div> : null}
       </div>
-      {actions ? <div className="row">{actions}</div> : null}
     </header>
   );
 }
@@ -413,6 +426,64 @@ export function Disclosure({
         {meta ? <span className="faint" style={{ textTransform: "none" }}>{meta}</span> : null}
       </button>
       {open ? <div className="section-body">{children}</div> : null}
+    </div>
+  );
+}
+
+/* ---- Settings composition ------------------------------------------------ */
+
+/**
+ * A grouped settings section: an uppercase group label ("General"),
+ * followed by a raised card whose rows read as one continuous form.
+ */
+export function SettingSection({
+  label,
+  title,
+  subtitle,
+  children,
+}: {
+  label: string;
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <h2 className="setting-section-label">{label}</h2>
+      <div className="setting-section">
+        <div style={{ padding: "var(--space-3) 0 var(--space-1)" }}>
+          <h2 style={{ fontSize: 14 }}>{title}</h2>
+          {subtitle ? <p className="setting-row-description">{subtitle}</p> : null}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * One setting: title + description left, control right; stacks on narrow
+ * windows. Rows inside a section are separated by hairlines.
+ */
+export function SettingRow({
+  title,
+  description,
+  control,
+  stacked = false,
+}: {
+  title: string;
+  description?: string;
+  control: ReactNode;
+  /** Force the stacked (label above control) layout regardless of width. */
+  stacked?: boolean;
+}) {
+  return (
+    <div className={stacked ? "setting-row stacked" : "setting-row"}>
+      <div className="setting-row-text">
+        <div className="setting-row-title">{title}</div>
+        {description ? <div className="setting-row-description">{description}</div> : null}
+      </div>
+      <div className="setting-row-control">{control}</div>
     </div>
   );
 }

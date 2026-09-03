@@ -1,6 +1,8 @@
 // The navigation sidebar: brand, section list with icons and Alt+ shortcuts,
 // and the vault state chip. Pure presentation; state comes from the shell.
 
+import { useTranslation } from "react-i18next";
+
 import { BrandMark, Icon } from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -13,15 +15,28 @@ export type SectionId =
   | "settings"
   | "diagnostics";
 
-export const SECTIONS: { id: SectionId; label: string; icon: IconName }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "dashboard" },
-  { id: "profiles", label: "Profiles", icon: "profiles" },
-  { id: "accounts", label: "Accounts", icon: "accounts" },
-  { id: "browser", label: "Browser", icon: "browser" },
-  { id: "vault", label: "Vault", icon: "vault" },
-  { id: "settings", label: "Settings", icon: "settings" },
-  { id: "diagnostics", label: "Diagnostics", icon: "diagnostics" },
+const WORKSPACE_SECTIONS: SectionId[] = [
+  "dashboard",
+  "profiles",
+  "accounts",
+  "browser",
+  "vault",
 ];
+
+const SUPPORT_SECTIONS: SectionId[] = ["settings", "diagnostics"];
+
+/** Alt+1..7 order across both groups. */
+export const SECTIONS: SectionId[] = [...WORKSPACE_SECTIONS, ...SUPPORT_SECTIONS];
+
+const SECTION_ICONS: Record<SectionId, IconName> = {
+  dashboard: "dashboard",
+  profiles: "profiles",
+  accounts: "accounts",
+  browser: "browser",
+  vault: "vault",
+  settings: "settings",
+  diagnostics: "diagnostics",
+};
 
 export function Sidebar({
   section,
@@ -33,28 +48,23 @@ export function Sidebar({
   /** Rendered at the bottom; shows vault state and jumps to the Vault page. */
   vaultChip: React.ReactNode;
 }) {
-  const workspace = SECTIONS.filter((entry) =>
-    ["dashboard", "profiles", "accounts", "browser", "vault"].includes(entry.id),
-  );
-  const support = SECTIONS.filter((entry) =>
-    ["settings", "diagnostics"].includes(entry.id),
-  );
+  const { t } = useTranslation();
 
   return (
-    <nav className="sidebar" aria-label="Sections">
+    <nav className="sidebar" aria-label={t("nav.workspace")}>
       <div className="brand">
         <BrandMark />
         <div>
-          <div className="brand-name">Thorium Workspace</div>
-          <div className="brand-tagline">Portable profiles &amp; secrets</div>
+          <div className="brand-name">{t("common.appName")}</div>
+          <div className="brand-tagline">{t("common.tagline")}</div>
         </div>
       </div>
 
-      <NavGroup entries={workspace} section={section} onNavigate={onNavigate} startIndex={0} />
+      <NavGroup ids={WORKSPACE_SECTIONS} section={section} onNavigate={onNavigate} startIndex={0} />
       <div className="nav-group-label" aria-hidden="true">
-        Support
+        {t("nav.support")}
       </div>
-      <NavGroup entries={support} section={section} onNavigate={onNavigate} startIndex={5} />
+      <NavGroup ids={SUPPORT_SECTIONS} section={section} onNavigate={onNavigate} startIndex={5} />
 
       <div className="sidebar-footer">{vaultChip}</div>
     </nav>
@@ -62,29 +72,30 @@ export function Sidebar({
 }
 
 function NavGroup({
-  entries,
+  ids,
   section,
   onNavigate,
   startIndex,
 }: {
-  entries: typeof SECTIONS;
+  ids: SectionId[];
   section: SectionId;
   onNavigate: (section: SectionId) => void;
   startIndex: number;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="nav" role="presentation">
-      {entries.map((entry, index) => (
+      {ids.map((id, index) => (
         <button
-          key={entry.id}
+          key={id}
           type="button"
           className="nav-item"
-          aria-current={section === entry.id ? "page" : undefined}
-          onClick={() => onNavigate(entry.id)}
-          title={`${entry.label} (Alt+${startIndex + index + 1})`}
+          aria-current={section === id ? "page" : undefined}
+          onClick={() => onNavigate(id)}
+          title={`${t(`nav.${id}`)} (Alt+${startIndex + index + 1})`}
         >
-          <Icon name={entry.icon} className="nav-icon" size={16} />
-          <span>{entry.label}</span>
+          <Icon name={SECTION_ICONS[id]} className="nav-icon" size={16} />
+          <span>{t(`nav.${id}`)}</span>
           <span className="nav-badge kbd" aria-hidden="true">
             Alt+{startIndex + index + 1}
           </span>

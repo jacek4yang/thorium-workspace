@@ -2,7 +2,8 @@
 // workspace, what needs attention, and what can be launched quickly. It only
 // reports what the backend actually exposes — no synthetic health checks.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Icon } from "../components/Icon";
 import {
@@ -16,6 +17,7 @@ import {
   Stat,
 } from "../components/ui";
 import { api } from "../lib/api";
+import { localizedErrorMessage } from "../lib/errors";
 import type { SectionId } from "../components/Sidebar";
 import type { ToastFn } from "../lib/hooks";
 import type { BrowserProfile, DiagnosticsSnapshot } from "../lib/types";
@@ -34,21 +36,11 @@ export default function DashboardPage({
   onNavigate: (section: SectionId) => void;
   onToast: ToastFn;
 }) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<DiagnosticsSnapshot | null>(null);
   const [profiles, setProfiles] = useState<BrowserProfile[] | null>(null);
   const [error, setError] = useState<WorkspaceError | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      const [diagnostics, listed] = await Promise.all([api.diagnostics(), api.profilesList()]);
-      setSnapshot(diagnostics);
-      setProfiles(listed);
-      setError(null);
-    } catch (thrown) {
-      setError(toError(thrown));
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -75,9 +67,9 @@ export default function DashboardPage({
     setBusyId(profile.id);
     try {
       await api.profileLaunch(profile.id);
-      onToast(`Launched “${profile.name}”`);
+      onToast(t("dashboard.profilesCard.launchedToast", { name: profile.name }));
     } catch (thrown) {
-      onToast(toError(thrown).message, "error");
+      onToast(localizedErrorMessage(toError(thrown), t), "error");
     } finally {
       setBusyId(null);
       void refresh();
@@ -88,12 +80,23 @@ export default function DashboardPage({
     setBusyId(profile.id);
     try {
       await api.profileStop(profile.id);
-      onToast(`Stopped “${profile.name}”`);
+      onToast(t("dashboard.profilesCard.stoppedToast", { name: profile.name }));
     } catch (thrown) {
-      onToast(toError(thrown).message, "error");
+      onToast(localizedErrorMessage(toError(thrown), t), "error");
     } finally {
       setBusyId(null);
       void refresh();
+    }
+  };
+
+  const refresh = async () => {
+    try {
+      const [diagnostics, listed] = await Promise.all([api.diagnostics(), api.profilesList()]);
+      setSnapshot(diagnostics);
+      setProfiles(listed);
+      setError(null);
+    } catch (thrown) {
+      setError(toError(thrown));
     }
   };
 
@@ -101,28 +104,29 @@ export default function DashboardPage({
     ? [
         {
           ok: snapshot.vaultExists && snapshot.vaultLockState === "unlocked",
-          label: "Vault",
-          detail:
-            !snapshot.vaultExists
-              ? "Not created yet"
-              : snapshot.vaultLockState === "unlocked"
-                ? "Unlocked"
-                : "Locked",
+          label: t("dashboard.health.vault"),
+          detail: !snapshot.vaultExists
+            ? t("dashboard.health.notCreated")
+            : snapshot.vaultLockState === "unlocked"
+              ? t("dashboard.health.unlocked")
+              : t("dashboard.health.locked"),
         },
         {
           ok: snapshot.currentThoriumVersion !== null,
-          label: "Thorium",
-          detail: snapshot.currentThoriumVersion ?? "Not installed",
+          label: t("dashboard.health.thorium"),
+          detail: snapshot.currentThoriumVersion ?? t("dashboard.health.notCreated"),
         },
         {
           ok: snapshot.workspaceWritable,
-          label: "Workspace",
-          detail: snapshot.workspaceWritable ? "Writable" : "Not writable",
+          label: t("dashboard.health.workspace"),
+          detail: snapshot.workspaceWritable
+            ? t("dashboard.health.writable")
+            : t("dashboard.health.notWritable"),
         },
         {
           ok: snapshot.schemaVersion > 0,
-          label: "Database",
-          detail: `Schema v${snapshot.schemaVersion}`,
+          label: t("dashboard.health.database"),
+          detail: t("dashboard.health.schema", { version: snapshot.schemaVersion }),
         },
       ]
     : null;
@@ -130,11 +134,11 @@ export default function DashboardPage({
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        subtitle="Workspace state at a glance"
+        title={t("dashboard.title")}
+        subtitle={t("dashboard.subtitle")}
         actions={
           <Button onClick={() => void refresh()} icon="refresh">
-            Refresh
+            {t("common.refresh")}
           </Button>
         }
       />
@@ -142,46 +146,55 @@ export default function DashboardPage({
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
 
         {!snapshot || !profiles ? (
-          <Loading label="Reading workspace state…" />
+          <Loading label={t("dashboard.loading")} />
         ) : (
           <>
             <div className="grid-stats">
               <Card>
                 <Stat
                   value={profiles.length}
-                  label="Profiles"
-                  detail={`${running.size} running`}
+                  label={t("dashboard.stats.profiles")}
+                  detail={t("dashboard.stats.running", { count: running.size })}
                 />
               </Card>
               <Card>
                 <Stat
                   value={running.size}
-                  label="Running browsers"
-                  detail={running.size === 0 ? "Idle" : "Supervised"}
+                  label={t("dashboard.stats.runningBrowsers")}
+                  detail={running.size === 0 ? t("dashboard.stats.idle") : t("dashboard.stats.supervised")}
                 />
               </Card>
               <Card>
                 <Stat
                   value={profiles.reduce((sum, profile) => sum + profile.accountIds.length, 0)}
-                  label="Accounts"
-                  detail={snapshot.vaultLockState === "unlocked" ? "Vault unlocked" : "Vault locked"}
+                  label={t("dashboard.stats.accounts")}
+                  detail={
+                    snapshot.vaultLockState === "unlocked"
+                      ? t("dashboard.stats.vaultUnlocked")
+                      : t("dashboard.stats.vaultLocked")
+                  }
                 />
               </Card>
               <Card>
                 <Stat
                   value={snapshot.currentThoriumVersion ?? "—"}
-                  label="Thorium current"
+                  label={t("dashboard.stats.thoriumCurrent")}
                   detail={
                     snapshot.installedThoriumVersions.length > 0
-                      ? `${snapshot.installedThoriumVersions.length} installed`
-                      : "Not installed"
+                      ? t("dashboard.stats.installedCount", {
+                          count: snapshot.installedThoriumVersions.length,
+                        })
+                      : t("common.notInstalled")
                   }
                 />
               </Card>
             </div>
 
             {health && (
-              <Card title="Workspace health" subtitle="Live checks against the running workspace">
+              <Card
+                title={t("dashboard.health.title")}
+                subtitle={t("dashboard.health.subtitle")}
+              >
                 <ul className="stack-tight" style={{ listStyle: "none", margin: 0, padding: 0 }}>
                   {health.map((item) => (
                     <li key={item.label} className="row" style={{ justifyContent: "space-between" }}>
@@ -203,12 +216,9 @@ export default function DashboardPage({
             {snapshot.vaultExists && snapshot.vaultLockState !== "unlocked" && (
               <Card>
                 <div className="row-wide">
-                  <span className="muted">
-                    The Vault is {snapshot.vaultLockState}. Account passwords and 2FA are sealed
-                    until it is unlocked.
-                  </span>
+                  <span className="muted">{t("dashboard.vaultLockedCard.message")}</span>
                   <Button onClick={() => onNavigate("vault")} icon="unlock">
-                    Unlock Vault
+                    {t("dashboard.vaultLockedCard.action")}
                   </Button>
                 </div>
               </Card>
@@ -217,11 +227,9 @@ export default function DashboardPage({
             {!snapshot.vaultExists && (
               <Card>
                 <div className="row-wide">
-                  <span className="muted">
-                    Create your encrypted Vault to start storing account credentials.
-                  </span>
+                  <span className="muted">{t("dashboard.vaultMissingCard.message")}</span>
                   <Button variant="primary" onClick={() => onNavigate("vault")} icon="vault">
-                    Set up Vault
+                    {t("dashboard.vaultMissingCard.action")}
                   </Button>
                 </div>
               </Card>
@@ -230,33 +238,31 @@ export default function DashboardPage({
             {snapshot.currentThoriumVersion === null && (
               <Card>
                 <div className="row-wide">
-                  <span className="muted">
-                    No Thorium browser is installed yet. Profiles need it before they can launch.
-                  </span>
+                  <span className="muted">{t("dashboard.noThoriumCard.message")}</span>
                   <Button onClick={() => onNavigate("browser")} icon="download">
-                    Manage Browser
+                    {t("dashboard.noThoriumCard.action")}
                   </Button>
                 </div>
               </Card>
             )}
 
             <Card
-              title="Profiles"
-              subtitle="Launch or stop an isolated browser environment"
+              title={t("dashboard.profilesCard.title")}
+              subtitle={t("dashboard.profilesCard.subtitle")}
               actions={
                 <Button size="small" onClick={() => onNavigate("profiles")}>
-                  Manage profiles
+                  {t("dashboard.profilesCard.manage")}
                 </Button>
               }
             >
               {profiles.length === 0 ? (
                 <EmptyState
                   icon="profiles"
-                  title="No profiles yet"
-                  description="A profile is an isolated Thorium browser environment with its own User Data directory. Create one to get started."
+                  title={t("dashboard.profilesCard.emptyTitle")}
+                  description={t("dashboard.profilesCard.emptyDescription")}
                   action={
                     <Button variant="primary" icon="plus" onClick={() => onNavigate("profiles")}>
-                      Create your first profile
+                      {t("dashboard.profilesCard.emptyAction")}
                     </Button>
                   }
                 />
@@ -271,12 +277,12 @@ export default function DashboardPage({
                             <strong className="truncate">{profile.name}</strong>
                             {isRunning && (
                               <Badge tone="success" icon="play">
-                                Running
+                                {t("dashboard.profilesCard.running")}
                               </Badge>
                             )}
                           </div>
                           <div className="faint truncate">
-                            {describeSelection(profile)}
+                            {describeSelection(profile, t)}
                             {(profile.locale || profile.timezone) && " · "}
                             {[profile.locale, profile.timezone].filter(Boolean).join(" · ")}
                           </div>
@@ -288,7 +294,7 @@ export default function DashboardPage({
                             disabled={busyId !== null}
                             onClick={() => void stop(profile)}
                           >
-                            Stop
+                            {t("dashboard.profilesCard.stop")}
                           </Button>
                         ) : (
                           <Button
@@ -298,7 +304,7 @@ export default function DashboardPage({
                             disabled={busyId !== null}
                             onClick={() => void launch(profile)}
                           >
-                            Launch
+                            {t("dashboard.profilesCard.launch")}
                           </Button>
                         )}
                       </li>
@@ -314,10 +320,13 @@ export default function DashboardPage({
   );
 }
 
-function describeSelection(profile: BrowserProfile): string {
+function describeSelection(
+  profile: BrowserProfile,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
   return profile.thoriumVersion.selection === "pinned"
-    ? `Thorium ${profile.thoriumVersion.version} (pinned)`
-    : "Thorium (follows Current)";
+    ? t("dashboard.profilesCard.pinned", { version: profile.thoriumVersion.version })
+    : t("dashboard.profilesCard.followsCurrent");
 }
 
 function toError(thrown: unknown): WorkspaceError {

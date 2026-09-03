@@ -7,6 +7,11 @@ accurately from this state.
 ## Toolchain used (verified)
 
 - Windows 11 (10.0.26200), rustc/cargo 1.98.0 stable MSVC, Node 26, pnpm 11.9.
+- Download engine: parallel segmented downloads (up to 8 ranges, retry +
+  resume per segment) into a preallocated part file; no client-level
+  total timeout (the 30s timeout was silently killing every >30s
+  download); budgets unchanged; verified 2026-09-03 with local range
+  server tests + live-through-proxy fallback test.
 - Quality gates at last commit: `cargo fmt --check`, `cargo clippy
   --workspace --all-targets -- -D warnings`, `cargo test --workspace`
   (197 tests, 0 failures), frontend lint (0 errors)/typecheck/test

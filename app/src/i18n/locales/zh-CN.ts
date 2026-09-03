@@ -362,6 +362,8 @@ export const zhCN = {
       check: "检查上游发布",
       checking: "检查中…",
       notChecked: "点击“检查上游发布”以列出 Windows 便携版构建。",
+      directDownloadHint:
+        "尚未配置下载代理。直连 GitHub 下载可能非常缓慢——可在“设置 → 浏览器与下载”中配置代理以加快安装。",
       noneFound: "未找到发布",
       noneFoundDescription: "上游未找到 Windows {{variant}} 便携版构建。请尝试其他构建。",
       columnVersion: "版本",

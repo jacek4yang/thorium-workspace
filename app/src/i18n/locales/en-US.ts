@@ -380,6 +380,8 @@ export const enUS = {
       check: "Check upstream releases",
       checking: "Checking…",
       notChecked: "Press “Check upstream releases” to list portable Windows builds.",
+      directDownloadHint:
+        "No download proxy is configured. Downloading directly from GitHub can be very slow depending on your network — configure one under Settings → Browser & Downloads for faster installs.",
       noneFound: "No releases found",
       noneFoundDescription:
         "No portable Windows {{variant}} builds were found upstream. Try another variant.",

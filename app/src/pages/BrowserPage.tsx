@@ -54,6 +54,14 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [error, setError] = useState<WorkspaceError | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ThoriumVersionInfo | null>(null);
+  const [proxyConfigured, setProxyConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void api
+      .settingsGet()
+      .then((settings) => setProxyConfigured(Boolean(settings.downloadProxy?.trim())))
+      .catch(() => setProxyConfigured(null));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -273,6 +281,11 @@ export default function BrowserPage({ onToast }: { onToast: ToastFn }) {
           subtitle={t("browser.install.subtitle")}
         >
           <div className="stack">
+            {proxyConfigured === false && (
+              <Notice tone="info" icon="info">
+                {t("browser.install.directDownloadHint")}
+              </Notice>
+            )}
             <div className="row">
               <Field label={t("browser.install.variant")} hint={t("browser.install.variantHint")}>
                 {(id) => (

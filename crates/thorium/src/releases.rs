@@ -97,14 +97,21 @@ impl Client {
                 "https://api.github.com/repos/{}/releases?per_page={}",
                 source.slug, per_source
             );
-            let response = self
-                .http
-                .get(&url)
-                .timeout(Duration::from_secs(30))
-                .header("Accept", "application/vnd.github+json")
-                .send()
-                .await
-                .map_err(|error| ThoriumError::Discovery(error.to_string()))?;
+            // Transient failures (timeouts, connection resets) are
+            // expected on imperfect networks; retry before surfacing.
+            let response = retry_async(3, || {
+                let url = url.clone();
+                async move {
+                    self.http
+                        .get(&url)
+                        .timeout(Duration::from_secs(30))
+                        .header("Accept", "application/vnd.github+json")
+                        .send()
+                        .await
+                }
+            })
+            .await
+            .map_err(|error| ThoriumError::Discovery(error.to_string()))?;
             let status = response.status();
             let releases: Vec<serde_json::Value> = response
                 .json()
@@ -196,16 +203,18 @@ impl Client {
     /// 1-byte ranged GET. `total` is `None` when the server does not report
     /// a size; `ranged` is true only when it answered `206 Partial Content`.
     async fn probe_download(&self, url: &str) -> Result<(Option<u64>, bool), ThoriumError> {
-        let response = self
-            .http
-            .get(url)
-            .timeout(Duration::from_secs(30))
-            .header("Range", "bytes=0-0")
-            .send()
-            .await
-            .map_err(|error| ThoriumError::Download {
-                detail: error.to_string(),
-            })?;
+        let response = retry_async(3, || async {
+            self.http
+                .get(url)
+                .timeout(Duration::from_secs(30))
+                .header("Range", "bytes=0-0")
+                .send()
+                .await
+        })
+        .await
+        .map_err(|error| ThoriumError::Download {
+            detail: error.to_string(),
+        })?;
         match response.status() {
             reqwest::StatusCode::PARTIAL_CONTENT => {
                 // Content-Range: bytes 0-0/TOTAL
@@ -238,6 +247,34 @@ const MIN_SEGMENT_BYTES: u64 = 4 * 1024 * 1024;
 /// proxy drop ("error decoding response body") into a hiccup instead of a
 /// failed 350 MB download.
 const SEGMENT_ATTEMPTS: usize = 3;
+/// No data for this long counts as a stall and triggers a resume-retry —
+/// short network hiccups must degrade to retries, never hard errors.
+const STALL_TIMEOUT: Duration = Duration::from_secs(20);
+/// Whole-stream attempts for the (rare) non-resumable fallback.
+const SINGLE_STREAM_ATTEMPTS: usize = 2;
+
+/// Retries a fallible idempotent async operation with linear backoff.
+/// GETs here never mutate anything, so blanket retry is safe; the last
+/// error is the one surfaced.
+async fn retry_async<T, E, Fut, F>(attempts: usize, mut op: F) -> Result<T, E>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, E>>,
+{
+    assert!(attempts >= 1);
+    for attempt in 1..=attempts {
+        match op().await {
+            Ok(value) => return Ok(value),
+            Err(error) => {
+                if attempt == attempts {
+                    return Err(error);
+                }
+                tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+            }
+        }
+    }
+    unreachable!("loop returns on the final attempt")
+}
 
 fn segment_count(total: u64) -> u64 {
     if total < PARALLEL_MIN_TOTAL {
@@ -247,13 +284,39 @@ fn segment_count(total: u64) -> u64 {
 }
 
 /// Single bounded stream. Used for unknown-size and range-incapable
-/// servers; budgets are enforced inside the read loop.
+/// servers; budgets are enforced inside the read loop. A stalled or reset
+/// connection retries the whole stream (there are no ranges to resume
+/// with) within the shared time budget.
 async fn download_single(
     http: &reqwest::Client,
     url: &str,
     target: &Path,
     max_bytes: u64,
     max_duration: Duration,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
+) -> Result<(), ThoriumError> {
+    let deadline = std::time::Instant::now() + max_duration;
+    let mut last: Option<ThoriumError> = None;
+    for attempt in 1..=SINGLE_STREAM_ATTEMPTS {
+        match single_stream_attempt(http, url, target, max_bytes, deadline, progress).await {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last = Some(error);
+                if attempt < SINGLE_STREAM_ATTEMPTS && std::time::Instant::now() < deadline {
+                    tokio::time::sleep(Duration::from_millis(500 * attempt as u64)).await;
+                }
+            }
+        }
+    }
+    Err(last.expect("at least one attempt"))
+}
+
+async fn single_stream_attempt(
+    http: &reqwest::Client,
+    url: &str,
+    target: &Path,
+    max_bytes: u64,
+    deadline: std::time::Instant,
     progress: &(dyn Fn(u64, u64) + Send + Sync),
 ) -> Result<(), ThoriumError> {
     let response = http
@@ -268,7 +331,6 @@ async fn download_single(
             detail: error.to_string(),
         })?;
     let total = response.content_length().unwrap_or(0);
-    let started = std::time::Instant::now();
     let mut file = tokio::fs::File::create(target)
         .await
         .map_err(|source| ThoriumError::Io {
@@ -280,7 +342,7 @@ async fn download_single(
     let mut downloaded: u64 = 0;
     let mut response_stream = response.bytes_stream();
     loop {
-        if started.elapsed() > max_duration {
+        if std::time::Instant::now() > deadline {
             return Err(ThoriumError::Download {
                 detail: "download exceeded the time budget".to_owned(),
             });
@@ -290,8 +352,16 @@ async fn download_single(
                 detail: format!("download exceeded the size budget {max_bytes}"),
             });
         }
-        match response_stream.next().await {
-            Some(Ok(chunk)) => {
+        match tokio::time::timeout(STALL_TIMEOUT, response_stream.next()).await {
+            Err(_stalled) => {
+                return Err(ThoriumError::Download {
+                    detail: format!(
+                        "no data for {}s; connection stalled",
+                        STALL_TIMEOUT.as_secs()
+                    ),
+                });
+            }
+            Ok(Some(Ok(chunk))) => {
                 file.write_all(&chunk)
                     .await
                     .map_err(|source| ThoriumError::Io {
@@ -301,12 +371,12 @@ async fn download_single(
                 downloaded += chunk.len() as u64;
                 progress(downloaded, total);
             }
-            Some(Err(error)) => {
+            Ok(Some(Err(error))) => {
                 return Err(ThoriumError::Download {
                     detail: error.to_string(),
                 });
             }
-            None => break,
+            Ok(None) => break,
         }
     }
     file.flush().await.map_err(|source| ThoriumError::Io {
@@ -429,8 +499,17 @@ async fn segment_attempt(
                 detail: "download exceeded the time budget".to_owned(),
             });
         }
-        match stream.next().await {
-            Some(Ok(chunk)) => {
+        match tokio::time::timeout(STALL_TIMEOUT, stream.next()).await {
+            Err(_stalled) => {
+                return Err(SegmentFailure {
+                    written,
+                    detail: format!(
+                        "no data for {}s; connection stalled",
+                        STALL_TIMEOUT.as_secs()
+                    ),
+                });
+            }
+            Ok(Some(Ok(chunk))) => {
                 file.write_all(&chunk)
                     .await
                     .map_err(|error| SegmentFailure {
@@ -446,13 +525,13 @@ async fn segment_attempt(
                     });
                 }
             }
-            Some(Err(error)) => {
+            Ok(Some(Err(error))) => {
                 return Err(SegmentFailure {
                     written,
                     detail: error.to_string(),
                 });
             }
-            None => {
+            Ok(None) => {
                 if written == expected {
                     return Ok(written);
                 }

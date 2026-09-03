@@ -289,6 +289,14 @@ a {
   gap: var(--space-4);
 }
 
+/* Children of a vertical stack fill its width: auto margins on flex items
+   would override stretch and leave every card at intrinsic width (the
+   ragged-dashboard problem). */
+.stack > * {
+  margin-inline: 0;
+  max-width: none;
+}
+
 .stack-tight {
   display: flex;
   flex-direction: column;
@@ -838,8 +846,27 @@ tbody tr:hover {
 
 .stat {
   display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.stat-body {
+  display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .stat-value {
@@ -847,6 +874,7 @@ tbody tr:hover {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .stat-label {

@@ -94,12 +94,29 @@ export function Badge({
   );
 }
 
-export function Stat({ value, label, detail }: { value: ReactNode; label: string; detail?: ReactNode }) {
+export function Stat({
+  value,
+  label,
+  detail,
+  icon,
+}: {
+  value: ReactNode;
+  label: string;
+  detail?: ReactNode;
+  icon?: IconName;
+}) {
   return (
     <div className="stat">
-      <span className="stat-value">{value}</span>
-      <span className="stat-label">{label}</span>
-      {detail ? <span className="faint">{detail}</span> : null}
+      {icon ? (
+        <span className="stat-icon">
+          <Icon name={icon} size={16} />
+        </span>
+      ) : null}
+      <div className="stat-body">
+        <span className="stat-value">{value}</span>
+        <span className="stat-label">{label}</span>
+        {detail ? <span className="faint">{detail}</span> : null}
+      </div>
     </div>
   );
 }

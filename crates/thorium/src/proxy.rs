@@ -55,6 +55,23 @@ impl Client {
     /// (direct, or through the proxy it was built with). Returns the
     /// trimmed IP literal.
     pub async fn fetch_exit_ip(&self) -> Result<String, ThoriumError> {
+        // Short timeouts are normal on flaky networks; retry before
+        // surfacing an error to the user.
+        for attempt in 1..=3 {
+            match self.fetch_exit_ip_once().await {
+                Ok(ip) => return Ok(ip),
+                Err(error) => {
+                    if attempt == 3 {
+                        return Err(error);
+                    }
+                    tokio::time::sleep(Duration::from_millis(400 * attempt as u64)).await;
+                }
+            }
+        }
+        unreachable!("loop returns on the final attempt")
+    }
+
+    async fn fetch_exit_ip_once(&self) -> Result<String, ThoriumError> {
         let response = self
             .http
             .get(EXIT_IP_ENDPOINT)

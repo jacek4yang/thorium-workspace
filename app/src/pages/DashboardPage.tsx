@@ -152,6 +152,7 @@ export default function DashboardPage({
             <div className="grid-stats">
               <Card>
                 <Stat
+                  icon="profiles"
                   value={profiles.length}
                   label={t("dashboard.stats.profiles")}
                   detail={t("dashboard.stats.running", { count: running.size })}
@@ -159,13 +160,19 @@ export default function DashboardPage({
               </Card>
               <Card>
                 <Stat
+                  icon="play"
                   value={running.size}
                   label={t("dashboard.stats.runningBrowsers")}
-                  detail={running.size === 0 ? t("dashboard.stats.idle") : t("dashboard.stats.supervised")}
+                  detail={
+                    running.size === 0
+                      ? t("dashboard.stats.idle")
+                      : t("dashboard.stats.supervised")
+                  }
                 />
               </Card>
               <Card>
                 <Stat
+                  icon="accounts"
                   value={profiles.reduce((sum, profile) => sum + profile.accountIds.length, 0)}
                   label={t("dashboard.stats.accounts")}
                   detail={
@@ -177,6 +184,7 @@ export default function DashboardPage({
               </Card>
               <Card>
                 <Stat
+                  icon="browser"
                   value={snapshot.currentThoriumVersion ?? "—"}
                   label={t("dashboard.stats.thoriumCurrent")}
                   detail={
@@ -195,21 +203,25 @@ export default function DashboardPage({
                 title={t("dashboard.health.title")}
                 subtitle={t("dashboard.health.subtitle")}
               >
-                <ul className="stack-tight" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                <div
+                  className="grid"
+                  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}
+                >
                   {health.map((item) => (
-                    <li key={item.label} className="row" style={{ justifyContent: "space-between" }}>
-                      <span className="row" style={{ flexWrap: "nowrap" }}>
-                        <Icon
-                          name={item.ok ? "check" : "alert"}
-                          size={15}
-                          style={{ color: item.ok ? "var(--success)" : "var(--warning)" }}
-                        />
-                        <span>{item.label}</span>
-                      </span>
+                    <div key={item.label} className="list-row">
+                      <Icon
+                        name={item.ok ? "check" : "alert"}
+                        size={16}
+                        style={{
+                          color: item.ok ? "var(--success)" : "var(--warning)",
+                          flex: "none",
+                        }}
+                      />
+                      <span className="grow">{item.label}</span>
                       <Badge tone={item.ok ? "success" : "warning"}>{item.detail}</Badge>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </Card>
             )}
 

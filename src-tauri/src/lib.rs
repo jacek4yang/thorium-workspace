@@ -101,6 +101,19 @@ fn settings_save(ws: Ws<'_>, settings: WorkspaceSettings) -> CmdResult<()> {
     controller(ws.save_settings(&settings))
 }
 
+/// Probes connectivity for a candidate download-proxy endpoint by fetching
+/// the public exit IP from ip.sb. `proxy` of `None`/empty tests the direct
+/// route. The candidate is validated and probed without saving; the proxy
+/// URL never appears in errors.
+#[tauri::command]
+async fn proxy_test(
+    ws: tauri::State<'_, Workspace>,
+    proxy: Option<String>,
+) -> CmdResult<thorium_workspace_controller::ProxyTestResult> {
+    controller(Workspace::test_download_proxy(proxy).await)
+        .inspect(|_| ws.record_activity(Instant::now()))
+}
+
 // ---------------------------------------------------------------------------
 // Profiles
 
@@ -411,6 +424,7 @@ pub fn run() {
             vault_change_password,
             settings_get,
             settings_save,
+            proxy_test,
             profiles_list,
             profile_get,
             profile_create,

@@ -2,20 +2,30 @@
 //!
 //! Composes `thorium::releases` (discovery + bounded download),
 //! `thorium::InstallLayout` (staging/promote/current), and storage
-//! (install registry). No proxy logic exists here: production networking
-//! is direct, per the v1.0.0 contract.
+//! (install registry). Download traffic may route through the
+//! user-configured proxy in [`WorkspaceSettings::download_proxy`]; that
+//! proxy never applies to browser profile launches.
 
 use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::Utc;
 use serde::Serialize;
-use thorium_workspace_domain::ThoriumInstall;
+use thorium_workspace_domain::{ThoriumInstall, WorkspaceSettings};
 use thorium_workspace_thorium::Variant;
 use thorium_workspace_thorium::releases::Client;
 
 use crate::error::ControllerError;
 use crate::workspace::Workspace;
+
+/// Result of a proxy connectivity probe.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyTestResult {
+    /// Public IP observed at the probe endpoint through the candidate
+    /// routing (the proxy when one was given, direct otherwise).
+    pub exit_ip: String,
+}
 
 /// One installed Thorium version surfaced to the UI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -55,6 +65,36 @@ const DOWNLOAD_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const DOWNLOAD_MAX_DURATION: Duration = Duration::from_secs(30 * 60);
 
 impl Workspace {
+    /// Builds the release/download client for the configured settings:
+    /// routed through `download_proxy` when set, direct otherwise.
+    pub fn release_client(settings: &WorkspaceSettings) -> Result<Client, ControllerError> {
+        match settings.download_proxy.as_deref() {
+            Some(proxy) if !proxy.trim().is_empty() => {
+                thorium_workspace_domain::validate_proxy_url(proxy)?;
+                Client::new_with_proxy(proxy.trim()).map_err(ControllerError::Thorium)
+            }
+            _ => Ok(Client::new()?),
+        }
+    }
+
+    /// Probes connectivity for the candidate proxy setting: fetches the
+    /// public exit IP from ip.sb through `proxy` when set, or directly
+    /// when `None`. Used by the Settings page "Test" action so the user
+    /// can verify the endpoint before saving.
+    pub async fn test_download_proxy(
+        proxy: Option<String>,
+    ) -> Result<ProxyTestResult, ControllerError> {
+        let candidate = WorkspaceSettings {
+            download_proxy: proxy,
+            ..WorkspaceSettings::default()
+        };
+        // Validates the URL shape with a stable diagnostic code before any
+        // network attempt.
+        let client = Self::release_client(&candidate)?;
+        let exit_ip = client.fetch_exit_ip().await?;
+        Ok(ProxyTestResult { exit_ip })
+    }
+
     /// Installed versions (filesystem truth merged with the registry).
     pub fn installed_thorium_versions(&self) -> Result<Vec<ThoriumVersionInfo>, ControllerError> {
         let layout = self.thorium_layout();
@@ -82,7 +122,8 @@ impl Workspace {
 
     /// Discovers installable upstream Windows portable releases.
     pub async fn discover_thorium_releases(&self) -> Result<Vec<ReleaseOption>, ControllerError> {
-        let client = Client::new()?;
+        let settings = self.settings()?;
+        let client = Self::release_client(&settings)?;
         let per_source = client.discover_windows_releases(10).await?;
         let mut options = Vec::new();
         for (repo, releases) in per_source {
@@ -120,7 +161,8 @@ impl Workspace {
         let layout = self.thorium_layout();
         layout.initialize()?;
         let staging = self.root().join("browsers/thorium/staging");
-        let client = Client::new()?;
+        let settings = self.settings()?;
+        let client = Self::release_client(&settings)?;
         let file_name = format!("Thorium_{variant_id}_{version}.zip");
         let mut emit_progress = |downloaded: u64, total: u64| progress(downloaded, total);
         let archive = client
@@ -200,7 +242,28 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use crate::workspace::Workspace;
-    use thorium_workspace_domain::DiagnosticCode as _;
+    use thorium_workspace_domain::{DiagnosticCode as _, WorkspaceSettings};
+
+    #[test]
+    fn release_client_rejects_invalid_proxy_settings() {
+        let settings = WorkspaceSettings {
+            download_proxy: Some("definitely not a proxy".to_owned()),
+            ..WorkspaceSettings::default()
+        };
+        let error = Workspace::release_client(&settings).expect_err("rejected");
+        assert_eq!(error.diagnostic_code(), "DOMAIN_INVALID_PROXY_URL");
+    }
+
+    #[test]
+    fn release_client_accepts_direct_and_valid_proxy() {
+        let direct = WorkspaceSettings::default();
+        assert!(Workspace::release_client(&direct).is_ok());
+        let proxied = WorkspaceSettings {
+            download_proxy: Some("socks5://127.0.0.1:10808".to_owned()),
+            ..WorkspaceSettings::default()
+        };
+        assert!(Workspace::release_client(&proxied).is_ok());
+    }
 
     #[test]
     fn installed_versions_merge_layout_and_registry() {

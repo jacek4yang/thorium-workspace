@@ -59,7 +59,7 @@ hex = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 
 # Networking (rustls only; no OpenSSL runtime dependency)
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "json", "stream", "gzip"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "json", "stream", "gzip", "socks"] }
 
 # Browser management
 zip = { version = "8", default-features = false, features = ["deflate"] }

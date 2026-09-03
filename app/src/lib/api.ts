@@ -9,6 +9,7 @@ import {
   DiagnosticsSnapshot,
   OtpCode,
   ProfileInput,
+  ProxyTestResult,
   RecoveryCode,
   ReleaseOption,
   SecondFactor,
@@ -42,6 +43,8 @@ export const api = {
   settingsGet: () => call<WorkspaceSettings>("settings_get"),
   settingsSave: (settings: WorkspaceSettings) =>
     call<void>("settings_save", { settings }),
+  proxyTest: (proxy: string | null) =>
+    call<ProxyTestResult>("proxy_test", { proxy }),
 
   // profiles
   profilesList: () => call<BrowserProfile[]>("profiles_list"),

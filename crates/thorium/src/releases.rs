@@ -57,8 +57,11 @@ impl Release {
 }
 
 /// GitHub client for release discovery and downloads.
+#[derive(Debug)]
 pub struct Client {
-    http: reqwest::Client,
+    /// Shared HTTP client; `pub(crate)` so the proxy module can build
+    /// proxy-routed instances without exposing construction details.
+    pub(crate) http: reqwest::Client,
 }
 
 impl Client {
@@ -71,25 +74,6 @@ impl Client {
                 " (+https://github.com/jacek4yang/thorium-workspace)"
             ))
             .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|error| ThoriumError::Discovery(error.to_string()))?;
-        Ok(Self { http })
-    }
-
-    /// Builds a client that routes through an HTTP proxy (development
-    /// use; production defaults to [`Client::new`], which uses the
-    /// system network configuration).
-    pub fn new_with_proxy(proxy_url: &str) -> Result<Self, ThoriumError> {
-        let proxy = reqwest::Proxy::all(proxy_url)
-            .map_err(|error| ThoriumError::Discovery(error.to_string()))?;
-        let http = reqwest::Client::builder()
-            .user_agent(concat!(
-                "thorium-workspace/",
-                env!("CARGO_PKG_VERSION"),
-                " (+https://github.com/jacek4yang/thorium-workspace)"
-            ))
-            .timeout(Duration::from_secs(30))
-            .proxy(proxy)
             .build()
             .map_err(|error| ThoriumError::Discovery(error.to_string()))?;
         Ok(Self { http })
@@ -312,5 +296,19 @@ mod tests {
             .expect("bounded download");
         assert!(downloaded.is_file());
         assert!(!downloaded.to_string_lossy().contains(".part"));
+    }
+
+    /// Live probe test (ignored by default; requires THORIUM_TEST_PROXY):
+    /// the exit IP observed through the proxy must be a parseable IP
+    /// literal. Verified live on 2026-09-03 through http://127.0.0.1:10808.
+    #[tokio::test]
+    #[ignore]
+    async fn live_exit_ip_probe_through_proxy() {
+        let Ok(proxy) = std::env::var("THORIUM_TEST_PROXY") else {
+            panic!("set THORIUM_TEST_PROXY to run the live test");
+        };
+        let client = Client::new_with_proxy(&proxy).expect("client");
+        let ip = client.fetch_exit_ip().await.expect("probe succeeds");
+        assert!(ip.parse::<std::net::IpAddr>().is_ok(), "got {ip}");
     }
 }

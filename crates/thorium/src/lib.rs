@@ -9,6 +9,7 @@
 pub mod catalog;
 pub mod error;
 pub mod install;
+pub mod proxy;
 pub mod releases;
 
 pub use catalog::{Variant, WINDOWS_PORTABLE_ZIP_PATTERN};

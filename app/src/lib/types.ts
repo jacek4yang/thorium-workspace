@@ -40,6 +40,17 @@ export interface WorkspaceSettings {
   vaultLockOnMinimize: boolean;
   theme: "system" | "light" | "dark";
   preferredThoriumVariant: string;
+  /**
+   * Optional download proxy (`scheme://host:port`). Routes workspace
+   * downloads (Thorium discovery/install) only — never browser profile
+   * traffic. `null` means direct connection.
+   */
+  downloadProxy: string | null;
+}
+
+/** Result of probing the exit IP through the candidate proxy routing. */
+export interface ProxyTestResult {
+  exitIp: string;
 }
 
 export interface DiagnosticsSnapshot {

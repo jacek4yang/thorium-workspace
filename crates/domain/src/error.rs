@@ -35,6 +35,10 @@ pub enum DomainError {
     #[error("URL must be a valid http or https URL")]
     InvalidUrl,
 
+    /// A proxy endpoint was not a usable `scheme://host:port` URL.
+    #[error("proxy must be a valid http://, https://, socks5://, or socks5h:// host:port endpoint")]
+    InvalidProxyUrl,
+
     /// A timezone did not look like an IANA identifier.
     #[error("timezone must be an IANA identifier such as America/Los_Angeles")]
     InvalidTimezone,
@@ -64,6 +68,7 @@ impl DomainError {
             Self::NameTooLong { .. } => "DOMAIN_NAME_TOO_LONG",
             Self::ControlCharacters => "DOMAIN_CONTROL_CHARACTERS",
             Self::InvalidUrl => "DOMAIN_INVALID_URL",
+            Self::InvalidProxyUrl => "DOMAIN_INVALID_PROXY_URL",
             Self::InvalidTimezone => "DOMAIN_INVALID_TIMEZONE",
             Self::InvalidLocale => "DOMAIN_INVALID_LOCALE",
             Self::InvalidId => "DOMAIN_INVALID_ID",

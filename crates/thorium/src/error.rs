@@ -18,6 +18,17 @@ pub enum ThoriumError {
     #[error("release discovery failed: {0}")]
     Discovery(String),
 
+    /// The configured download proxy endpoint was rejected by the HTTP
+    /// client. The proxy URL is deliberately not embedded: it may contain
+    /// proxy credentials.
+    #[error("download proxy configuration is not usable")]
+    ProxyConfig,
+
+    /// The proxy connectivity probe (ip.sb exit-IP check) failed or the
+    /// answer was not an IP literal.
+    #[error("proxy probe failed: {0}")]
+    Probe(String),
+
     /// The download failed, timed out, or exceeded the size budget.
     #[error("download failed: {detail}")]
     Download {
@@ -60,6 +71,8 @@ impl DiagnosticCode for ThoriumError {
         match self {
             Self::Io { .. } => "THORIUM_IO_FAILED",
             Self::Discovery(_) => "THORIUM_DISCOVERY_FAILED",
+            Self::ProxyConfig => "THORIUM_PROXY_CONFIG",
+            Self::Probe(_) => "THORIUM_PROBE_FAILED",
             Self::Download { .. } => "THORIUM_DOWNLOAD_FAILED",
             Self::InvalidArchive { .. } => "THORIUM_INVALID_ARCHIVE",
             Self::NotInstalled { .. } => "THORIUM_NOT_INSTALLED",

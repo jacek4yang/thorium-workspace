@@ -43,7 +43,7 @@ impl Client {
                 env!("CARGO_PKG_VERSION"),
                 " (+https://github.com/jacek4yang/thorium-workspace)"
             ))
-            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(20))
             .no_proxy()
             .proxy(proxy)
             .build()

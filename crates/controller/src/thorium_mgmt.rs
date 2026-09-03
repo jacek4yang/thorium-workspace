@@ -164,7 +164,6 @@ impl Workspace {
         let settings = self.settings()?;
         let client = Self::release_client(&settings)?;
         let file_name = format!("Thorium_{variant_id}_{version}.zip");
-        let mut emit_progress = |downloaded: u64, total: u64| progress(downloaded, total);
         let archive = client
             .download_bounded(
                 url,
@@ -172,7 +171,7 @@ impl Workspace {
                 &file_name,
                 DOWNLOAD_MAX_BYTES,
                 DOWNLOAD_MAX_DURATION,
-                &mut emit_progress,
+                progress,
             )
             .await?;
 

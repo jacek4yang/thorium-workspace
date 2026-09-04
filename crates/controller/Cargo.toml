@@ -1,0 +1,28 @@
+[package]
+name = "thorium-workspace-controller"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Application services orchestrating workspace state and behavior"
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thorium-workspace-domain.workspace = true
+thorium-workspace-secrets.workspace = true
+thorium-workspace-storage.workspace = true
+thorium-workspace-vault.workspace = true
+thorium-workspace-otp.workspace = true
+thorium-workspace-qr.workspace = true
+thorium-workspace-thorium.workspace = true
+thorium-workspace-browser-profile.workspace = true
+thorium-workspace-windows-platform.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

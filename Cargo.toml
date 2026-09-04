@@ -1,0 +1,90 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/domain",
+    "crates/secrets",
+    "crates/storage",
+    "crates/vault",
+    "crates/otp",
+    "crates/qr",
+    "crates/thorium",
+    "crates/browser-profile",
+    "crates/controller",
+    "crates/windows-platform",
+    "crates/test-support",
+    "src-tauri",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "Proprietary"
+repository = "https://github.com/jacek4yang/thorium-workspace"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Internal crates
+thorium-workspace-domain = { path = "crates/domain" }
+thorium-workspace-secrets = { path = "crates/secrets" }
+thorium-workspace-storage = { path = "crates/storage" }
+thorium-workspace-vault = { path = "crates/vault" }
+thorium-workspace-otp = { path = "crates/otp" }
+thorium-workspace-qr = { path = "crates/qr" }
+thorium-workspace-thorium = { path = "crates/thorium" }
+thorium-workspace-browser-profile = { path = "crates/browser-profile" }
+thorium-workspace-controller = { path = "crates/controller" }
+thorium-workspace-windows-platform = { path = "crates/windows-platform" }
+thorium-workspace-test-support = { path = "crates/test-support" }
+
+# Core utilities
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+zeroize = { version = "1", features = ["zeroize_derive"] }
+secrecy = { version = "0.10", features = ["serde"] }
+tracing = "0.1"
+
+# Cryptography (audited RustCrypto primitives only)
+argon2 = { version = "0.6", default-features = false, features = ["alloc"] }
+chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc", "rand_core"] }
+sha1 = { version = "0.11", default-features = false }
+sha2 = { version = "0.11", default-features = false }
+hmac = { version = "0.13", default-features = false }
+data-encoding = "2"
+hex = "0.4"
+
+# Storage
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+# Networking (rustls only; no OpenSSL runtime dependency)
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "charset", "json", "stream", "gzip", "socks"] }
+
+# Browser management
+zip = { version = "8", default-features = false, features = ["deflate"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+rand = "0.10"
+
+# QR
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+rqrr = { version = "0.10", default-features = false, features = ["img"] }
+
+# Clipboard
+arboard = { version = "3", default-features = false, features = ["windows-sys"] }
+
+# Tauri
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2" }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+
+# Testing
+tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"

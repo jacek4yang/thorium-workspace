@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Portable release build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build portable executable and NSIS installer
+        # One compile covers both artifacts: the raw executable lands in
+        # target/release and the NSIS bundle in target/release/bundle/nsis.
+        run: pnpm tauri build --bundles nsis
+
+      - name: Locate built executable
+        id: locate
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "target/release/*.exe" |
+            Where-Object { $_.Name -notlike "*-bin" -and $_.Name -notlike "*.d" } |
+            Where-Object { $_.Name -in @("ThoriumWorkspace.exe", "thorium-workspace.exe") } |
+            Select-Object -First 1
+          if (-not $exe) {
+            Get-ChildItem "target/release" | ForEach-Object { Write-Host $_.Name }
+            throw "built executable not found"
+          }
+          "path=$($exe.FullName)" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Name and hash artifacts (portable + installer)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+
+          # Portable single-file executable.
+          $portable = "ThoriumWorkspace-v$version-x86_64.exe"
+          Copy-Item "${{ steps.locate.outputs.path }}" $portable
+          $hash = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $portable" | Out-File -Encoding ascii "$portable.sha256"
+
+          # NSIS per-user installer (also runs portable-style beside its
+          # install directory, which stays user-writable).
+          $setupBuilt = Get-ChildItem "target/release/bundle/nsis/*-setup.exe" |
+            Select-Object -First 1
+          if (-not $setupBuilt) {
+            Get-ChildItem "target/release/bundle/nsis" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host $_.Name }
+            throw "NSIS installer not found"
+          }
+          $setup = "ThoriumWorkspace-v$version-x64-setup.exe"
+          Copy-Item $setupBuilt.FullName $setup
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $setup" | Out-File -Encoding ascii "$setup.sha256"
+
+          Get-ChildItem "ThoriumWorkspace-v$version-*" | ForEach-Object { Write-Host $_.Name }
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ThoriumWorkspace-v*-x86_64.exe
+            ThoriumWorkspace-v*-x86_64.exe.sha256
+            ThoriumWorkspace-v*-x64-setup.exe
+            ThoriumWorkspace-v*-x64-setup.exe.sha256
+          fail_on_unmatched_files: true

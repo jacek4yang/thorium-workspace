@@ -39,6 +39,24 @@ A launched Browser Profile owns a runtime session containing the Thorium process
 
 Windows Job Objects should make child lifetime explicit and prevent orphaned browser process trees after manager failure where practical.
 
+## Download proxy (owner-requested, v1.0.0)
+
+At the owner's explicit request, v1.0.0 includes a single **download-scoped**
+proxy setting (`WorkspaceSettings.download_proxy`, `scheme://host:port`):
+
+- It routes **workspace downloads only**: Thorium release discovery, install
+  archives, and the ip.sb connectivity probe (`proxy_test` command).
+- It **never** routes browser profile traffic, CDP, or vault operations; the
+  browser-profile crate has no proxy input at all.
+- The proxy URL may embed credentials, so it is never logged, never echoed
+  into error messages, and never rendered in diagnostic dumps (the Settings
+  input shows it because the user typed it).
+- Validation is dependency-free (`domain::validate_proxy_url`), applied before
+  any network attempt, with the stable `DOMAIN_INVALID_PROXY_URL` code.
+
 ## Future proxy extension point
 
-A future release may add a `network_route_id`/equivalent reference to a Browser Profile. v1.0.0 does not implement network routes, Xray, subscriptions, or proxy UI. Do not let future proxy plans contaminate the current core with unused machinery.
+A future release may still add a `network_route_id`/equivalent reference to a
+Browser Profile. v1.0.0 does not implement network routes, Xray, subscriptions,
+or any browser-traffic proxying. Do not let future proxy plans contaminate the
+current core with unused machinery.

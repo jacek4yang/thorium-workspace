@@ -1,0 +1,14 @@
+[package]
+name = "thorium-workspace-browser-profile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Browser profile launching, isolation, and process supervision"
+
+[dependencies]
+thiserror.workspace = true
+uuid.workspace = true
+thorium-workspace-domain.workspace = true
+thorium-workspace-windows-platform.workspace = true

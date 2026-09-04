@@ -1,0 +1,12 @@
+{
+  "name": "thorium-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Portable Windows workspace for Thorium browser profiles (root package.json: Tauri CLI + pnpm workspace root)",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}

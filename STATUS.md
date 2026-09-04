@@ -133,6 +133,22 @@ Tauri command surface: 34 typed commands (`proxy_test` included),
 - Portable zip extracts with `BIN/thorium.exe`; no per-asset SHA-256
   digests upstream; integrity relies on TLS + zip CRC + structure checks.
 
+## Release v1.0.0 (published 2026-09-04)
+
+- GitHub Release: https://github.com/jacek4yang/thorium-workspace/releases/tag/v1.0.0
+- Artifacts (all verified present): portable `ThoriumWorkspace-v1.0.0-x86_64.exe`,
+  NSIS installer `ThoriumWorkspace-v1.0.0-x64-setup.exe`, each with a
+  `.sha256`. CI build observed green (`Portable release build` 8m26s);
+  PR #2 quality gates observed green (17m30s) before the tag.
+- Installer verified locally end to end: silent install to
+  `%LOCALAPPDATA%/ThoriumWorkspace` (no admin), launch, workspace
+  bootstrap beside the installed exe, Start Menu shortcut, Chinese
+  first-run onboarding, uninstall keeps user data.
+- The published setup.exe was downloaded back and its SHA-256 matched the
+  published checksum file (`faab30c1...`).
+- Release notes are bilingual (zh-CN/en-US) with per-artifact guidance.
+- Binaries are unsigned; SmartScreen warning is expected and documented.
+
 ## Remaining work for v1.1 (ordered)
 
 1. Manual GUI checkpoint: "Test connection" click-through; profile

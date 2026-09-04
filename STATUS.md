@@ -133,7 +133,7 @@ Tauri command surface: 34 typed commands (`proxy_test` included),
 - Portable zip extracts with `BIN/thorium.exe`; no per-asset SHA-256
   digests upstream; integrity relies on TLS + zip CRC + structure checks.
 
-## Remaining work for v1.0.0 (ordered)
+## Remaining work for v1.1 (ordered)
 
 1. Manual GUI checkpoint: "Test connection" click-through; profile
    persistence across restart; English-mode visual pass.

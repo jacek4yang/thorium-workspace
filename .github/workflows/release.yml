@@ -39,8 +39,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build portable executable (frontend embedded, no bundler)
-        run: pnpm tauri build --no-bundle
+      - name: Build portable executable and NSIS installer
+        # One compile covers both artifacts: the raw executable lands in
+        # target/release and the NSIS bundle in target/release/bundle/nsis.
+        run: pnpm tauri build --bundles nsis
 
       - name: Locate built executable
         id: locate
@@ -56,20 +58,33 @@ jobs:
           }
           "path=$($exe.FullName)" | Out-File -Append $env:GITHUB_OUTPUT
 
-      - name: Name and hash artifacts
-        id: artifacts
+      - name: Name and hash artifacts (portable + installer)
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          $name = "ThoriumWorkspace-v$version-x86_64.exe"
-          $dest = "ThoriumWorkspace-v$version-x86_64.exe"
-          Copy-Item "${{ steps.locate.outputs.path }}" $dest
-          $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $name" | Out-File -Encoding ascii "$dest.sha256"
-          "name=$name" | Out-File -Append $env:GITHUB_OUTPUT
-          "hash=$hash" | Out-File -Append $env:GITHUB_OUTPUT
-          Get-Content "$dest.sha256"
+
+          # Portable single-file executable.
+          $portable = "ThoriumWorkspace-v$version-x86_64.exe"
+          Copy-Item "${{ steps.locate.outputs.path }}" $portable
+          $hash = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $portable" | Out-File -Encoding ascii "$portable.sha256"
+
+          # NSIS per-user installer (also runs portable-style beside its
+          # install directory, which stays user-writable).
+          $setupBuilt = Get-ChildItem "target/release/bundle/nsis/*-setup.exe" |
+            Select-Object -First 1
+          if (-not $setupBuilt) {
+            Get-ChildItem "target/release/bundle/nsis" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host $_.Name }
+            throw "NSIS installer not found"
+          }
+          $setup = "ThoriumWorkspace-v$version-x64-setup.exe"
+          Copy-Item $setupBuilt.FullName $setup
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $setup" | Out-File -Encoding ascii "$setup.sha256"
+
+          Get-ChildItem "ThoriumWorkspace-v$version-*" | ForEach-Object { Write-Host $_.Name }
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
@@ -77,4 +92,6 @@ jobs:
           files: |
             ThoriumWorkspace-v*-x86_64.exe
             ThoriumWorkspace-v*-x86_64.exe.sha256
+            ThoriumWorkspace-v*-x64-setup.exe
+            ThoriumWorkspace-v*-x64-setup.exe.sha256
           fail_on_unmatched_files: true
